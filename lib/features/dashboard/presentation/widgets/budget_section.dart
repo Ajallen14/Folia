@@ -192,14 +192,6 @@ class _BudgetSectionState extends State<BudgetSection> {
   Future<void> _deleteBudget(String category) async {
     await DatabaseHelper.instance.deleteBudget(category);
     setState(() {});
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$category budget removed'),
-          backgroundColor: Colors.teal,
-        ),
-      );
-    }
   }
 
   Widget _buildGlassContainer({
@@ -306,13 +298,18 @@ class _BudgetSectionState extends State<BudgetSection> {
               final category = budget['category_name'];
               final limit = (budget['monthly_limit'] as num).toDouble();
               final spent = widget.categoryTotals[category] ?? 0.0;
-              final percent = (spent / limit);
+              final percent = limit > 0 ? (spent / limit) : 0.0;
               final clampedPercent = percent.clamp(0.0, 1.0);
 
-              final Color categoryColor = _getCategoryStyling(
-                category,
-              )['color'];
-              final bool isOverBudget = percent >= 1.0;
+              // DYNAMIC COLOR LOGIC
+              Color dynamicColor;
+              if (percent >= 1.0) {
+                dynamicColor = Colors.redAccent;
+              } else if (percent >= 0.75) {
+                dynamicColor = Colors.orangeAccent;
+              } else {
+                dynamicColor = _getCategoryStyling(category)['color'];
+              }
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -334,14 +331,12 @@ class _BudgetSectionState extends State<BudgetSection> {
                         Text(
                           '${NumberFormat.currency(symbol: '₹', decimalDigits: 0).format(spent)} / ${NumberFormat.currency(symbol: '₹', decimalDigits: 0).format(limit)}',
                           style: TextStyle(
-                            color: isOverBudget
+                            color: percent >= 1.0
                                 ? Colors.redAccent
                                 : Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(width: 8),
-
                         PopupMenuButton<String>(
                           icon: const Icon(
                             Icons.more_vert,
@@ -350,7 +345,6 @@ class _BudgetSectionState extends State<BudgetSection> {
                           ),
                           padding: EdgeInsets.zero,
                           color: const Color(0xFF2C2C2E),
-                          elevation: 8,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -383,7 +377,7 @@ class _BudgetSectionState extends State<BudgetSection> {
                         ),
                       ],
                     ),
-
+                    const SizedBox(height: 8),
                     LayoutBuilder(
                       builder: (context, constraints) {
                         return Stack(
@@ -402,11 +396,11 @@ class _BudgetSectionState extends State<BudgetSection> {
                               height: 8,
                               width: constraints.maxWidth * clampedPercent,
                               decoration: BoxDecoration(
-                                color: categoryColor,
+                                color: dynamicColor,
                                 borderRadius: BorderRadius.circular(4),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: categoryColor.withOpacity(0.4),
+                                    color: dynamicColor.withOpacity(0.4),
                                     blurRadius: 6,
                                   ),
                                 ],
