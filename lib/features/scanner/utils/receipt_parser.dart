@@ -3,6 +3,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 class ReceiptParser {
   static Map<String, dynamic> parse(RecognizedText recognizedText) {
+    // 1. Use the new Contour Chaining algorithm to un-curve the receipt
     final lines = _rebuildLinesFromWords(recognizedText);
     final rawText = recognizedText.text;
 
@@ -21,8 +22,9 @@ class ReceiptParser {
       0.0,
       (sum, item) => sum + item['price'],
     );
-    if (calculatedItemsSum > extractedTotal)
+    if (calculatedItemsSum > extractedTotal) {
       extractedTotal = calculatedItemsSum;
+    }
 
     return {
       'merchant_name': _extractMerchant(lines),
@@ -32,9 +34,11 @@ class ReceiptParser {
     };
   }
 
+  /// CONTOUR CHAINING ALGORITHM: Follows the physical curve of the paper!
   static List<String> _rebuildLinesFromWords(RecognizedText recognizedText) {
     List<Map<String, dynamic>> words = [];
 
+    // 1. Extract every single word
     for (TextBlock block in recognizedText.blocks) {
       for (TextLine line in block.lines) {
         for (TextElement element in line.elements) {
@@ -51,26 +55,42 @@ class ReceiptParser {
 
     if (words.isEmpty) return [];
 
-    words.sort((a, b) => a['yCenter'].compareTo(b['yCenter']));
+    // 2. Sort words strictly from Left-to-Right first
+    words.sort((a, b) => a['xStart'].compareTo(b['xStart']));
 
     List<List<Map<String, dynamic>>> rows = [];
 
+    // 3. Connect the dots: Attach each word to the row that ends closest to its Y-coordinate
     for (var word in words) {
-      bool placed = false;
-      double threshold = word['height'] * 0.5;
+      List<Map<String, dynamic>>? bestRow;
+      double minDiff = double.infinity;
+      double threshold = word['height'] * 0.8;
 
       for (var row in rows) {
-        double rowY =
-            row.map((e) => e['yCenter']).reduce((a, b) => a + b) / row.length;
-        if ((word['yCenter'] - rowY).abs() < threshold) {
-          row.add(word);
-          placed = true;
-          break;
+        var lastWord = row.last; // Look ONLY at the most recently added word
+        double yDiff = (word['yCenter'] - lastWord['yCenter']).abs();
+
+        if (yDiff < threshold && yDiff < minDiff) {
+          minDiff = yDiff;
+          bestRow = row;
         }
       }
-      if (!placed) rows.add([word]);
+
+      if (bestRow != null) {
+        bestRow.add(word); // Successfully connected the chain!
+      } else {
+        rows.add([word]); // Start a new row
+      }
     }
 
+    // 4. Now that rows are built, sort them from Top-to-Bottom
+    rows.sort((a, b) {
+      double aY = a.map((e) => e['yCenter']).reduce((x, y) => x + y) / a.length;
+      double bY = b.map((e) => e['yCenter']).reduce((x, y) => x + y) / b.length;
+      return aY.compareTo(bY);
+    });
+
+    // 5. Ensure words inside each row are ordered Left-to-Right, then join
     List<String> reconstructed = [];
     for (var row in rows) {
       row.sort((a, b) => a['xStart'].compareTo(b['xStart']));
@@ -111,35 +131,58 @@ class ReceiptParser {
       'discount',
       'thanks',
       'invoice',
+      'guest',
+      'signature',
+      'served',
+      'consume',
+      'net',
+      'bill',
     ];
 
     for (String line in lines) {
       final lowerLine = line.toLowerCase();
 
       if (excludeKeywords.any((k) => lowerLine.contains(k))) {
-        if (lowerLine.startsWith('total') || lowerLine.contains('grand total'))
+        if (lowerLine.startsWith('total') ||
+            lowerLine.contains('grand total')) {
           continue;
+        }
         continue;
       }
 
       String cleanedLine = line.replaceFirst(RegExp(r'^\d+[\.\)\-]?\s+'), '');
 
+      // Nos processing
+      double? foundDecimalQty;
+      final nosRegex = RegExp(
+        r'\b(\d+(?:\.\d+)?)\s*(?:nos\.?|qty\.?)\b',
+        caseSensitive: false,
+      );
+      final nosMatch = nosRegex.firstMatch(cleanedLine);
+
+      if (nosMatch != null) {
+        foundDecimalQty = double.tryParse(nosMatch.group(1)!);
+        cleanedLine = cleanedLine.replaceFirst(nosMatch.group(0)!, ' ');
+      }
+
+      cleanedLine = cleanedLine.replaceAll(
+        RegExp(r'\bnos\.?\b', caseSensitive: false),
+        ' ',
+      );
+
       // A. Extract Prices
       final decimalMatches = decimalRegex.allMatches(cleanedLine).toList();
 
-      // NEW: ORPHAN TEXT RECOVERY
+      // ORPHAN TEXT RECOVERY
       if (decimalMatches.isEmpty) {
-        // If we have no prices, but we already have items in our list, this might be a wrapped name!
         if (items.isNotEmpty && cleanedLine.length < 30) {
           String orphan = cleanedLine.toLowerCase();
           if (!excludeKeywords.any((k) => orphan.contains(k))) {
-            // Clean it just like a normal item name
             String cleanOrphan = cleanedLine
                 .replaceAll(RegExp(r'[xX\*\/\|\-\+\=\@\:\(\)]'), '')
                 .replaceAll(RegExp(r'\s+'), ' ')
                 .trim();
 
-            // If it's actual text (not random numbers), glue it to the previous item!
             if (cleanOrphan.isNotEmpty &&
                 RegExp(r'[a-zA-Z]').hasMatch(cleanOrphan)) {
               items.last['item_name'] =
@@ -147,7 +190,7 @@ class ReceiptParser {
             }
           }
         }
-        continue; // Move on to the next line
+        continue;
       }
 
       List<double> prices = decimalMatches
@@ -156,30 +199,38 @@ class ReceiptParser {
       double totalItemPrice = prices.last;
 
       String qtyStrippedText = cleanedLine;
-      for (var match in decimalMatches)
+      for (var match in decimalMatches) {
         qtyStrippedText = qtyStrippedText.replaceFirst(match.group(0)!, ' ');
+      }
 
       // B. Extract Quantity
       int quantity = 1;
-      var qtyMatch = explicitQtyRegex.firstMatch(qtyStrippedText);
-      if (qtyMatch != null) {
-        String? qtyStr =
-            qtyMatch.group(1) ?? qtyMatch.group(2) ?? qtyMatch.group(3);
-        if (qtyStr != null) quantity = int.tryParse(qtyStr) ?? 1;
+
+      if (foundDecimalQty != null) {
+        quantity = foundDecimalQty.toInt();
       } else {
-        final intMatches = standaloneIntRegex
-            .allMatches(qtyStrippedText)
-            .toList();
-        if (intMatches.isNotEmpty) {
-          quantity = int.tryParse(intMatches.last.group(0)!) ?? 1;
+        var qtyMatch = explicitQtyRegex.firstMatch(qtyStrippedText);
+        if (qtyMatch != null) {
+          String? qtyStr =
+              qtyMatch.group(1) ?? qtyMatch.group(2) ?? qtyMatch.group(3);
+          if (qtyStr != null) quantity = int.tryParse(qtyStr) ?? 1;
+        } else {
+          final intMatches = standaloneIntRegex
+              .allMatches(qtyStrippedText)
+              .toList();
+          if (intMatches.isNotEmpty) {
+            quantity = int.tryParse(intMatches.last.group(0)!) ?? 1;
+          }
         }
       }
 
       // C. Extract Name
       String itemName = cleanedLine;
-      for (var match in decimalMatches)
+      for (var match in decimalMatches) {
         itemName = itemName.replaceFirst(match.group(0)!, '');
+      }
 
+      var qtyMatch = explicitQtyRegex.firstMatch(itemName);
       if (qtyMatch != null) {
         itemName = itemName.replaceFirst(qtyMatch.group(0)!, '');
       } else {
@@ -229,6 +280,8 @@ class ReceiptParser {
       'token',
       'cashier',
       'name',
+      'gstin',
+      'fssai',
     ];
     for (String line in lines) {
       final lowerLine = line.toLowerCase();
@@ -250,7 +303,8 @@ class ReceiptParser {
       if (line.contains('total') ||
           line.contains('amount due') ||
           line.contains('balance') ||
-          line.contains('grand total')) {
+          line.contains('grand total') ||
+          line.contains('net amount')) {
         final match = amountRegex.firstMatch(lines[i]);
         if (match != null) {
           final amount = _parseAmount(match.group(0)!);
@@ -270,8 +324,9 @@ class ReceiptParser {
   static double _parseAmount(String amountStr) {
     try {
       String clean = amountStr.replaceAll(' ', '').replaceAll(',', '.');
-      if (clean.indexOf('.') != clean.lastIndexOf('.'))
+      if (clean.indexOf('.') != clean.lastIndexOf('.')) {
         clean = clean.replaceFirst('.', '');
+      }
       return double.parse(clean);
     } catch (e) {
       return 0.0;
