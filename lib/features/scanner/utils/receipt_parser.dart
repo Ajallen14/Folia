@@ -90,7 +90,6 @@ class ReceiptParser {
     );
     final standaloneIntRegex = RegExp(r'(?<![a-zA-Z])\b\d+\b(?![a-zA-Z])');
 
-    // ADDED: cgst, sgst, igst, round, discount
     final excludeKeywords = [
       'total',
       'subtotal',
@@ -110,6 +109,8 @@ class ReceiptParser {
       'igst',
       'round',
       'discount',
+      'thanks',
+      'invoice',
     ];
 
     for (String line in lines) {
@@ -118,15 +119,36 @@ class ReceiptParser {
       if (excludeKeywords.any((k) => lowerLine.contains(k))) {
         if (lowerLine.startsWith('total') || lowerLine.contains('grand total'))
           continue;
-        continue; // Skip tax and rounding lines completely
+        continue;
       }
 
-      // NEW: Strip leading serial numbers (e.g., "1 Idli" becomes "Idli")
       String cleanedLine = line.replaceFirst(RegExp(r'^\d+[\.\)\-]?\s+'), '');
 
       // A. Extract Prices
       final decimalMatches = decimalRegex.allMatches(cleanedLine).toList();
-      if (decimalMatches.isEmpty) continue;
+
+      // NEW: ORPHAN TEXT RECOVERY
+      if (decimalMatches.isEmpty) {
+        // If we have no prices, but we already have items in our list, this might be a wrapped name!
+        if (items.isNotEmpty && cleanedLine.length < 30) {
+          String orphan = cleanedLine.toLowerCase();
+          if (!excludeKeywords.any((k) => orphan.contains(k))) {
+            // Clean it just like a normal item name
+            String cleanOrphan = cleanedLine
+                .replaceAll(RegExp(r'[xX\*\/\|\-\+\=\@\:\(\)]'), '')
+                .replaceAll(RegExp(r'\s+'), ' ')
+                .trim();
+
+            // If it's actual text (not random numbers), glue it to the previous item!
+            if (cleanOrphan.isNotEmpty &&
+                RegExp(r'[a-zA-Z]').hasMatch(cleanOrphan)) {
+              items.last['item_name'] =
+                  (items.last['item_name'] + ' ' + cleanOrphan).trim();
+            }
+          }
+        }
+        continue; // Move on to the next line
+      }
 
       List<double> prices = decimalMatches
           .map((m) => _parseAmount(m.group(0)!))
@@ -149,7 +171,6 @@ class ReceiptParser {
             .allMatches(qtyStrippedText)
             .toList();
         if (intMatches.isNotEmpty) {
-          // FIX: Grab the LAST standalone integer (closest to the price) instead of the first
           quantity = int.tryParse(intMatches.last.group(0)!) ?? 1;
         }
       }
@@ -164,7 +185,6 @@ class ReceiptParser {
       } else {
         final intMatches = standaloneIntRegex.allMatches(itemName).toList();
         if (intMatches.isNotEmpty) {
-          // FIX: Remove that same LAST standalone integer from the name
           itemName = itemName.replaceFirst(intMatches.last.group(0)!, '');
         }
       }
@@ -185,7 +205,7 @@ class ReceiptParser {
           itemName.length > 2 &&
           !RegExp(r'^\d+$').hasMatch(itemName)) {
         items.add({
-          'name': itemName,
+          'item_name': itemName,
           'quantity': quantity,
           'price': totalItemPrice,
         });

@@ -81,29 +81,24 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     }
   }
 
-  // --- UPDATED: Now uses Offline ML Kit instead of Gemini ---
   Future<void> _processImage(File imageFile) async {
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      // 1. Initialize ML Kit Text Recognizer
+      // 1. OFFLINE ML KIT PARSING
       final inputImage = InputImage.fromFile(imageFile);
       final textRecognizer = TextRecognizer(
         script: TextRecognitionScript.latin,
       );
-
-      // 2. Extract raw text from the image instantly offline
       final recognizedText = await textRecognizer.processImage(inputImage);
-
-      // Always close the recognizer to free up memory
       textRecognizer.close();
 
-      // 3. Pass the raw text through your new Regex Heuristic Engine
+      // 2. Feed it to our custom engine!
       final extractedData = ReceiptParser.parse(recognizedText);
 
-      debugPrint('========== ML KIT EXTRACTION SUCCESS ==========');
+      debugPrint('========== OFFLINE EXTRACTION SUCCESS ==========');
       debugPrint(extractedData.toString());
 
       if (mounted) {
@@ -151,14 +146,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. The Full-Screen Camera Preview
           SizedBox(
             width: double.infinity,
             height: double.infinity,
             child: CameraPreview(_cameraController!),
           ),
-
-          // 2. Cutout for the Receipt
           ColorFiltered(
             colorFilter: ColorFilter.mode(
               Colors.black.withOpacity(0.6),
@@ -186,13 +178,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
               ],
             ),
           ),
-
-          // 3. UI Controls
           SafeArea(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Top Bar
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
@@ -220,8 +209,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                     ],
                   ),
                 ),
-
-                // Bottom Controls
                 Container(
                   padding: const EdgeInsets.only(bottom: 40, top: 20),
                   child: Row(
@@ -264,8 +251,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
               ],
             ),
           ),
-
-          // 4. Loading Screen Overlay
           if (_isProcessing)
             const ProcessingOverlay(message: 'Analyzing your receipt...'),
         ],
