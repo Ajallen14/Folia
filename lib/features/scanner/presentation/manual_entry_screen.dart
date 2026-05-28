@@ -7,7 +7,6 @@ import '../../../core/database/database_helper.dart';
 import '../../dashboard/providers/receipt_provider.dart';
 
 class ManualEntryScreen extends ConsumerStatefulWidget {
-  // NEW: Add a parameter to accept the parsed ML Kit data
   final Map<String, dynamic>? prefilledData;
 
   const ManualEntryScreen({super.key, this.prefilledData});
@@ -44,7 +43,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
   void initState() {
     super.initState();
 
-    // NEW: Populate controllers automatically if ML Kit found data
     if (widget.prefilledData != null) {
       _merchantController.text = widget.prefilledData!['merchant_name'] ?? '';
 
@@ -53,11 +51,9 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
         _amountController.text = total.toString();
       }
 
-      // Try to parse the extracted date, fallback to today if it fails
       final dateStr = widget.prefilledData!['date'];
       if (dateStr != null) {
         try {
-          // Normalize slashes to dashes for easier parsing
           String normalizedDate = dateStr.replaceAll('/', '-');
           DateTime? parsedDate = DateTime.tryParse(normalizedDate);
           if (parsedDate != null) {
@@ -68,7 +64,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
         }
       }
 
-      // Automatically generate the line item text fields
       final items =
           widget.prefilledData!['items'] as List<Map<String, dynamic>>?;
       if (items != null && items.isNotEmpty) {
@@ -171,6 +166,85 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
     }
   }
 
+  // NEW: Premium Bottom Sheet Category Picker (Same as Review Screen)
+  Future<void> _showCategoryPicker() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text(
+                  'Select Category',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: _categories.length,
+                  itemBuilder: (context, index) {
+                    final category = _categories[index];
+                    final style = _getCategoryStyling(category);
+                    return ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: style['color'].withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          style['icon'],
+                          color: style['color'],
+                          size: 18,
+                        ),
+                      ),
+                      title: Text(
+                        category,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      trailing: _selectedCategory == category
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: Colors.teal,
+                              size: 20,
+                            )
+                          : const Icon(
+                              Icons.arrow_forward_ios,
+                              color: Colors.white24,
+                              size: 16,
+                            ),
+                      onTap: () => Navigator.pop(context, category),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedCategory = selected;
+      });
+    }
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -250,6 +324,8 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentCategoryStyle = _getCategoryStyling(_selectedCategory);
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
@@ -389,62 +465,47 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                               onTap: () => _selectDate(context),
                             ),
                             const Divider(color: Colors.white12, height: 1),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedCategory,
-                                dropdownColor: const Color(0xFF262628),
-                                icon: const Icon(
-                                  Icons.arrow_forward_ios,
-                                  color: Colors.white24,
-                                  size: 16,
+
+                            // NEW: Sleek Category Button Picker
+                            InkWell(
+                              onTap: _showCategoryPicker,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
                                 ),
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                ),
-                                items: _categories.map((String category) {
-                                  final style = _getCategoryStyling(category);
-                                  return DropdownMenuItem(
-                                    value: category,
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: style['color'].withOpacity(
-                                              0.2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            style['icon'],
-                                            color: style['color'],
-                                            size: 18,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text(category),
-                                      ],
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: currentCategoryStyle['color']
+                                            .withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        currentCategoryStyle['icon'],
+                                        color: currentCategoryStyle['color'],
+                                        size: 20,
+                                      ),
                                     ),
-                                  );
-                                }).toList(),
-                                onChanged: (String? newValue) {
-                                  if (newValue != null) {
-                                    setState(
-                                      () => _selectedCategory = newValue,
-                                    );
-                                  }
-                                },
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        _selectedCategory,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_forward_ios,
+                                      color: Colors.white24,
+                                      size: 16,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
