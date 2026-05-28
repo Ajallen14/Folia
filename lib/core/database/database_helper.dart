@@ -329,6 +329,39 @@ class DatabaseHelper {
   // BUDGET LOGIC
   Future<void> deleteBudget(String categoryName) async {
     final db = await instance.database;
-    await db.delete('budgets', where: 'category_name = ?', whereArgs: [categoryName]);
+    await db.delete(
+      'budgets',
+      where: 'category_name = ?',
+      whereArgs: [categoryName],
+    );
+  }
+
+  Future<void> updateReceipt(int id, Map<String, dynamic> data) async {
+    final db = await database; // Ensure this matches your variable name
+
+    // 1. Update the main receipt details
+    await db.update(
+      'receipts',
+      {
+        'merchant_name': data['merchant_name'],
+        'purchase_date': data['date'],
+        'total_amount': data['total_amount'],
+        'category_name': data['receipt_category'],
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    // 2. Clear old items and insert updated items
+    await db.delete('receipt_items', where: 'receipt_id = ?', whereArgs: [id]);
+
+    for (var item in data['items']) {
+      await db.insert('receipt_items', {
+        'receipt_id': id,
+        'item_name': item['item_name'],
+        'quantity': item['quantity'],
+        'price': item['price'],
+      });
+    }
   }
 }

@@ -7,11 +7,13 @@ import '../../dashboard/providers/receipt_provider.dart';
 class ReceiptPreviewScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> initialData;
   final String imagePath;
+  final bool isEditing;
 
   const ReceiptPreviewScreen({
     super.key,
     required this.initialData,
     required this.imagePath,
+    this.isEditing = false,
   });
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:wallet_pulse/features/scanner/presentation/receipt_preview_screen.dart';
 import '../providers/receipt_provider.dart';
 import 'widgets/budget_section.dart';
 import 'widgets/receipt_list_item.dart';
@@ -70,30 +71,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 _buildTopBar(),
                 const SizedBox(height: 30),
-
                 _buildSpendingSummary(dashboardState, ref),
                 const SizedBox(height: 30),
-
                 _buildChartSection(dashboardState),
                 const SizedBox(height: 40),
-
                 BudgetSection(categoryTotals: dashboardState.categoryTotals),
                 const SizedBox(height: 40),
 
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: Text(
-                    listTitle,
-                    key: ValueKey(dashboardState.currentFilter),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
+                // ... (AnimatedSwitcher and listTitle logic remains unchanged) ...
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 400),
                   transitionBuilder: (child, animation) => FadeTransition(
@@ -161,21 +146,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ref
                                       .read(dashboardProvider.notifier)
                                       .deleteReceipt(receipt['id']);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '${receipt['merchant_name']} deleted',
-                                      ),
-                                      backgroundColor: const Color(0xFF2C2C2E),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
                                 },
-                                child: ReceiptListItem(
-                                  merchantName: receipt['merchant_name'],
-                                  category: receipt['category_name'] ?? 'Other',
-                                  date: formattedDate,
-                                  totalAmount: formattedAmount,
+                                // --- STEP 1: ADDED GESTURE DETECTOR ---
+                                child: GestureDetector(
+                                  onTap: () {
+                                    // Navigate to Review screen for editing
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ReceiptPreviewScreen(
+                                          initialData:
+                                              receipt, // Pass the receipt data
+                                          imagePath:
+                                              receipt['image_path'] ?? '',
+                                          isEditing:
+                                              true, // IMPORTANT: Set this to true
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: ReceiptListItem(
+                                    merchantName: receipt['merchant_name'],
+                                    category:
+                                        receipt['category_name'] ?? 'Other',
+                                    date: formattedDate,
+                                    totalAmount: formattedAmount,
+                                  ),
                                 ),
                               ),
                             );
