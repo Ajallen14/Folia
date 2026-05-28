@@ -3,7 +3,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 class ReceiptParser {
   static Map<String, dynamic> parse(RecognizedText recognizedText) {
-    // 1. Use the new Contour Chaining algorithm to un-curve the receipt
     final lines = _rebuildLinesFromWords(recognizedText);
     final rawText = recognizedText.text;
 
@@ -34,11 +33,9 @@ class ReceiptParser {
     };
   }
 
-  /// CONTOUR CHAINING ALGORITHM: Follows the physical curve of the paper!
   static List<String> _rebuildLinesFromWords(RecognizedText recognizedText) {
     List<Map<String, dynamic>> words = [];
 
-    // 1. Extract every single word
     for (TextBlock block in recognizedText.blocks) {
       for (TextLine line in block.lines) {
         for (TextElement element in line.elements) {
@@ -55,19 +52,17 @@ class ReceiptParser {
 
     if (words.isEmpty) return [];
 
-    // 2. Sort words strictly from Left-to-Right first
     words.sort((a, b) => a['xStart'].compareTo(b['xStart']));
 
     List<List<Map<String, dynamic>>> rows = [];
 
-    // 3. Connect the dots: Attach each word to the row that ends closest to its Y-coordinate
     for (var word in words) {
       List<Map<String, dynamic>>? bestRow;
       double minDiff = double.infinity;
       double threshold = word['height'] * 0.8;
 
       for (var row in rows) {
-        var lastWord = row.last; // Look ONLY at the most recently added word
+        var lastWord = row.last;
         double yDiff = (word['yCenter'] - lastWord['yCenter']).abs();
 
         if (yDiff < threshold && yDiff < minDiff) {
@@ -77,20 +72,18 @@ class ReceiptParser {
       }
 
       if (bestRow != null) {
-        bestRow.add(word); // Successfully connected the chain!
+        bestRow.add(word);
       } else {
-        rows.add([word]); // Start a new row
+        rows.add([word]);
       }
     }
 
-    // 4. Now that rows are built, sort them from Top-to-Bottom
     rows.sort((a, b) {
       double aY = a.map((e) => e['yCenter']).reduce((x, y) => x + y) / a.length;
       double bY = b.map((e) => e['yCenter']).reduce((x, y) => x + y) / b.length;
       return aY.compareTo(bY);
     });
 
-    // 5. Ensure words inside each row are ordered Left-to-Right, then join
     List<String> reconstructed = [];
     for (var row in rows) {
       row.sort((a, b) => a['xStart'].compareTo(b['xStart']));
@@ -110,49 +103,26 @@ class ReceiptParser {
     );
     final standaloneIntRegex = RegExp(r'(?<![a-zA-Z])\b\d+\b(?![a-zA-Z])');
 
-    final excludeKeywords = [
-      'total',
-      'subtotal',
-      'tax',
-      'vat',
-      'change',
-      'cash',
-      'card',
-      'visa',
-      'mastercard',
-      'balance',
-      'due',
-      'amount',
-      'summary',
-      'cgst',
-      'sgst',
-      'igst',
-      'round',
-      'discount',
-      'thanks',
-      'invoice',
-      'guest',
-      'signature',
-      'served',
-      'consume',
-      'net',
-      'bill',
-    ];
+    final excludeRegex = RegExp(
+      r'\b(total|subtotal|sub|tax|vat|change|cash|card|visa|mastercard|balance|due|amount|summary|cgst|sgst|igst|round|roundoff|discount|thanks|thank|invoice|guest|signature|served|consume|net|bill|fssai|lic|visit|again)\b',
+      caseSensitive: false,
+    );
+
+    bool hasReachedTotals = false;
 
     for (String line in lines) {
-      final lowerLine = line.toLowerCase();
-
-      if (excludeKeywords.any((k) => lowerLine.contains(k))) {
-        if (lowerLine.startsWith('total') ||
-            lowerLine.contains('grand total')) {
-          continue;
+      // If we see a total, tax, or footer word...
+      if (excludeRegex.hasMatch(line)) {
+        // THE FIX: Only drop the gate if we have actually started adding food items!
+        // This stops headers like "Bill No" or "Amount" from triggering the gate too early.
+        if (items.isNotEmpty) {
+          hasReachedTotals = true;
         }
         continue;
       }
 
       String cleanedLine = line.replaceFirst(RegExp(r'^\d+[\.\)\-]?\s+'), '');
 
-      // Nos processing
       double? foundDecimalQty;
       final nosRegex = RegExp(
         r'\b(\d+(?:\.\d+)?)\s*(?:nos\.?|qty\.?)\b',
@@ -170,14 +140,11 @@ class ReceiptParser {
         ' ',
       );
 
-      // A. Extract Prices
       final decimalMatches = decimalRegex.allMatches(cleanedLine).toList();
 
-      // ORPHAN TEXT RECOVERY
       if (decimalMatches.isEmpty) {
-        if (items.isNotEmpty && cleanedLine.length < 30) {
-          String orphan = cleanedLine.toLowerCase();
-          if (!excludeKeywords.any((k) => orphan.contains(k))) {
+        if (!hasReachedTotals && items.isNotEmpty && cleanedLine.length < 40) {
+          if (!excludeRegex.hasMatch(cleanedLine)) {
             String cleanOrphan = cleanedLine
                 .replaceAll(RegExp(r'[xX\*\/\|\-\+\=\@\:\(\)]'), '')
                 .replaceAll(RegExp(r'\s+'), ' ')
@@ -203,7 +170,6 @@ class ReceiptParser {
         qtyStrippedText = qtyStrippedText.replaceFirst(match.group(0)!, ' ');
       }
 
-      // B. Extract Quantity
       int quantity = 1;
 
       if (foundDecimalQty != null) {
@@ -224,7 +190,6 @@ class ReceiptParser {
         }
       }
 
-      // C. Extract Name
       String itemName = cleanedLine;
       for (var match in decimalMatches) {
         itemName = itemName.replaceFirst(match.group(0)!, '');
@@ -267,27 +232,15 @@ class ReceiptParser {
   }
 
   static String _extractMerchant(List<String> lines) {
-    final ignoreWords = [
-      'date',
-      'time',
-      'bill',
-      'receipt',
-      'tax',
-      'particulars',
-      'qty',
-      'amount',
-      'rate',
-      'token',
-      'cashier',
-      'name',
-      'gstin',
-      'fssai',
-    ];
+    final ignoreRegex = RegExp(
+      r'\b(date|time|bill|receipt|tax|particulars|qty|amount|rate|token|cashier|name|gstin|fssai|sac|lic)\b',
+      caseSensitive: false,
+    );
+
     for (String line in lines) {
-      final lowerLine = line.toLowerCase();
       if (line.length > 3 &&
           !line.contains(RegExp(r'^\d+$')) &&
-          !ignoreWords.any((word) => lowerLine.contains(word))) {
+          !ignoreRegex.hasMatch(line)) {
         return line;
       }
     }
@@ -318,7 +271,7 @@ class ReceiptParser {
   static String? _extractDate(String rawText) {
     final dateRegex = RegExp(r'\b(\d{1,4}[-/]\d{1,2}[-/]\d{1,4})\b');
     final match = dateRegex.firstMatch(rawText);
-    return match != null ? match.group(0) : null;
+    return match?.group(0);
   }
 
   static double _parseAmount(String amountStr) {
