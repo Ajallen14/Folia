@@ -3,16 +3,13 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 class ReceiptParser {
   static Map<String, dynamic> parse(RecognizedText recognizedText) {
-    // 1. Visually stitch the columns back into horizontal rows using Intersection!
-    final lines = _reconstructLines(recognizedText);
+    final lines = _rebuildLinesFromWords(recognizedText);
     final rawText = recognizedText.text;
 
     // --- DEBUGGING ---
-    debugPrint("=== RECONSTRUCTED RECEIPT LINES ===");
-    for (var line in lines) {
-      debugPrint(line);
-    }
-    debugPrint("===================================");
+    debugPrint("=== REBUILT RECEIPT LINES ===");
+    for (var line in lines) debugPrint(line);
+    debugPrint("=============================");
     // -----------------
 
     if (lines.isEmpty) return {};
@@ -24,9 +21,8 @@ class ReceiptParser {
       0.0,
       (sum, item) => sum + item['price'],
     );
-    if (calculatedItemsSum > extractedTotal) {
+    if (calculatedItemsSum > extractedTotal)
       extractedTotal = calculatedItemsSum;
-    }
 
     return {
       'merchant_name': _extractMerchant(lines),
@@ -36,61 +32,48 @@ class ReceiptParser {
     };
   }
 
-  /// BOUNDING BOX INTERSECTION: The ultimate fix for slanted receipt tables.
-  static List<String> _reconstructLines(RecognizedText recognizedText) {
-    List<Map<String, dynamic>> elements = [];
+  static List<String> _rebuildLinesFromWords(RecognizedText recognizedText) {
+    List<Map<String, dynamic>> words = [];
 
     for (TextBlock block in recognizedText.blocks) {
       for (TextLine line in block.lines) {
-        elements.add({
-          'text': line.text.trim(),
-          'top': line.boundingBox.top,
-          'bottom': line.boundingBox.bottom,
-          'left': line.boundingBox.left,
-        });
+        for (TextElement element in line.elements) {
+          words.add({
+            'text': element.text.trim(),
+            'yCenter':
+                element.boundingBox.top + (element.boundingBox.height / 2),
+            'xStart': element.boundingBox.left,
+            'height': element.boundingBox.height,
+          });
+        }
       }
     }
 
-    if (elements.isEmpty) return [];
+    if (words.isEmpty) return [];
 
-    // 1. Sort all words from Top to Bottom
-    elements.sort((a, b) => a['top'].compareTo(b['top']));
+    words.sort((a, b) => a['yCenter'].compareTo(b['yCenter']));
 
     List<List<Map<String, dynamic>>> rows = [];
 
-    // 2. Snap words into rows if their vertical heights overlap
-    for (var el in elements) {
-      bool addedToRow = false;
+    for (var word in words) {
+      bool placed = false;
+      double threshold = word['height'] * 0.5;
 
       for (var row in rows) {
-        // Find the absolute highest and lowest points of the current row
-        double rowTop = row
-            .map((e) => e['top'])
-            .reduce((a, b) => a < b ? a : b);
-        double rowBottom = row
-            .map((e) => e['bottom'])
-            .reduce((a, b) => a > b ? a : b);
-
-        // Calculate the vertical center of the current word
-        double elCenter = (el['top'] + el['bottom']) / 2;
-
-        // If the center of the word falls inside the row, it belongs to this row!
-        if (elCenter >= rowTop && elCenter <= rowBottom) {
-          row.add(el);
-          addedToRow = true;
+        double rowY =
+            row.map((e) => e['yCenter']).reduce((a, b) => a + b) / row.length;
+        if ((word['yCenter'] - rowY).abs() < threshold) {
+          row.add(word);
+          placed = true;
           break;
         }
       }
-
-      if (!addedToRow) {
-        rows.add([el]);
-      }
+      if (!placed) rows.add([word]);
     }
 
-    // 3. Sort each row Left to Right, then join with spaces
     List<String> reconstructed = [];
     for (var row in rows) {
-      row.sort((a, b) => a['left'].compareTo(b['left']));
+      row.sort((a, b) => a['xStart'].compareTo(b['xStart']));
       reconstructed.add(row.map((e) => e['text']).join(' '));
     }
 
@@ -100,15 +83,14 @@ class ReceiptParser {
   static List<Map<String, dynamic>> _extractItems(List<String> lines) {
     List<Map<String, dynamic>> items = [];
 
-    // Upgraded Regex: Handles spaces inside decimals (e.g., 40 . 00 or 40, 00)
     final decimalRegex = RegExp(r'\b\d+\s*[.,]\s*\d{2}\b');
-
     final explicitQtyRegex = RegExp(
       r'\b(\d+)\s*[xX]\b|\b[xX]\s*(\d+)\b|\b(?:qty|qty\.|quantity|qnty)[:.]?\s*(\d+)\b',
       caseSensitive: false,
     );
     final standaloneIntRegex = RegExp(r'(?<![a-zA-Z])\b\d+\b(?![a-zA-Z])');
 
+    // ADDED: cgst, sgst, igst, round, discount
     final excludeKeywords = [
       'total',
       'subtotal',
@@ -123,18 +105,27 @@ class ReceiptParser {
       'due',
       'amount',
       'summary',
-      'particulars',
+      'cgst',
+      'sgst',
+      'igst',
+      'round',
+      'discount',
     ];
 
     for (String line in lines) {
       final lowerLine = line.toLowerCase();
 
-      if (excludeKeywords.any((keyword) => lowerLine.contains(keyword))) {
+      if (excludeKeywords.any((k) => lowerLine.contains(k))) {
         if (lowerLine.startsWith('total') || lowerLine.contains('grand total'))
           continue;
+        continue; // Skip tax and rounding lines completely
       }
 
-      final decimalMatches = decimalRegex.allMatches(line).toList();
+      // NEW: Strip leading serial numbers (e.g., "1 Idli" becomes "Idli")
+      String cleanedLine = line.replaceFirst(RegExp(r'^\d+[\.\)\-]?\s+'), '');
+
+      // A. Extract Prices
+      final decimalMatches = decimalRegex.allMatches(cleanedLine).toList();
       if (decimalMatches.isEmpty) continue;
 
       List<double> prices = decimalMatches
@@ -142,14 +133,13 @@ class ReceiptParser {
           .toList();
       double totalItemPrice = prices.last;
 
-      String qtyStrippedText = line;
-      for (var match in decimalMatches) {
+      String qtyStrippedText = cleanedLine;
+      for (var match in decimalMatches)
         qtyStrippedText = qtyStrippedText.replaceFirst(match.group(0)!, ' ');
-      }
 
+      // B. Extract Quantity
       int quantity = 1;
       var qtyMatch = explicitQtyRegex.firstMatch(qtyStrippedText);
-
       if (qtyMatch != null) {
         String? qtyStr =
             qtyMatch.group(1) ?? qtyMatch.group(2) ?? qtyMatch.group(3);
@@ -159,21 +149,24 @@ class ReceiptParser {
             .allMatches(qtyStrippedText)
             .toList();
         if (intMatches.isNotEmpty) {
+          // FIX: Grab the LAST standalone integer (closest to the price) instead of the first
           quantity = int.tryParse(intMatches.last.group(0)!) ?? 1;
         }
       }
 
-      // ISOLATE NAME
-      String itemName = line;
-      for (var match in decimalMatches) {
+      // C. Extract Name
+      String itemName = cleanedLine;
+      for (var match in decimalMatches)
         itemName = itemName.replaceFirst(match.group(0)!, '');
-      }
+
       if (qtyMatch != null) {
         itemName = itemName.replaceFirst(qtyMatch.group(0)!, '');
       } else {
         final intMatches = standaloneIntRegex.allMatches(itemName).toList();
-        if (intMatches.isNotEmpty)
+        if (intMatches.isNotEmpty) {
+          // FIX: Remove that same LAST standalone integer from the name
           itemName = itemName.replaceFirst(intMatches.last.group(0)!, '');
+        }
       }
 
       itemName = itemName
@@ -188,8 +181,9 @@ class ReceiptParser {
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
 
-      // If a valid name survived the cleaning process, save the item!
-      if (itemName.isNotEmpty && itemName.length > 1) {
+      if (itemName.isNotEmpty &&
+          itemName.length > 2 &&
+          !RegExp(r'^\d+$').hasMatch(itemName)) {
         items.add({
           'name': itemName,
           'quantity': quantity,
@@ -212,6 +206,9 @@ class ReceiptParser {
       'qty',
       'amount',
       'rate',
+      'token',
+      'cashier',
+      'name',
     ];
     for (String line in lines) {
       final lowerLine = line.toLowerCase();
@@ -226,13 +223,14 @@ class ReceiptParser {
 
   static double _extractTotal(List<String> lines, String rawText) {
     double highestTotal = 0.0;
-    final amountRegex = RegExp(r'\b\d+\s*[.,]\s*\d{2}\b');
+    final amountRegex = RegExp(r'\b\d+(?:[.,]\d{2})\b');
 
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].toLowerCase();
       if (line.contains('total') ||
           line.contains('amount due') ||
-          line.contains('balance')) {
+          line.contains('balance') ||
+          line.contains('grand total')) {
         final match = amountRegex.firstMatch(lines[i]);
         if (match != null) {
           final amount = _parseAmount(match.group(0)!);
@@ -251,7 +249,6 @@ class ReceiptParser {
 
   static double _parseAmount(String amountStr) {
     try {
-      // Clean up random OCR spaces inside decimals (e.g. "40 . 00" -> "40.00")
       String clean = amountStr.replaceAll(' ', '').replaceAll(',', '.');
       if (clean.indexOf('.') != clean.lastIndexOf('.'))
         clean = clean.replaceFirst('.', '');
