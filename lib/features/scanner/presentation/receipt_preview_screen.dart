@@ -27,6 +27,21 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
   List<Map<String, dynamic>> _editableItems = [];
   bool _isSaving = false;
 
+  String _selectedCategory = 'Other';
+
+  final List<String> _categories = [
+    'Groceries',
+    'Food & Dining',
+    'Travel & Transport',
+    'Shopping & Retail',
+    'Electronics',
+    'Health & Pharmacy',
+    'Home & Maintenance',
+    'Entertainment',
+    'Utility Bills',
+    'Other',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +54,11 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     _totalController = TextEditingController(
       text: widget.initialData['total_amount']?.toString(),
     );
+
+    if (widget.initialData['receipt_category'] != null &&
+        _categories.contains(widget.initialData['receipt_category'])) {
+      _selectedCategory = widget.initialData['receipt_category'];
+    }
 
     if (widget.initialData['items'] != null) {
       for (var item in widget.initialData['items']) {
@@ -91,6 +111,138 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     });
   }
 
+  Map<String, dynamic> _getCategoryStyling(String category) {
+    switch (category) {
+      case 'Groceries':
+        return {
+          'icon': Icons.local_grocery_store_outlined,
+          'color': const Color(0xFFE1BEE7),
+        };
+      case 'Food & Dining':
+        return {
+          'icon': Icons.restaurant_outlined,
+          'color': const Color(0xFFB2DFDB),
+        };
+      case 'Travel & Transport':
+        return {
+          'icon': Icons.directions_car_outlined,
+          'color': const Color(0xFFFFCCBC),
+        };
+      case 'Shopping & Retail':
+        return {
+          'icon': Icons.shopping_bag_outlined,
+          'color': const Color(0xFFF8BBD0),
+        };
+      case 'Electronics':
+        return {
+          'icon': Icons.devices_other_outlined,
+          'color': const Color(0xFFFFF9C4),
+        };
+      case 'Health & Pharmacy':
+        return {
+          'icon': Icons.medical_services_outlined,
+          'color': const Color(0xFFC8E6C9),
+        };
+      case 'Home & Maintenance':
+        return {
+          'icon': Icons.home_repair_service_outlined,
+          'color': const Color(0xFFD7CCC8),
+        };
+      case 'Entertainment':
+        return {
+          'icon': Icons.sports_esports_outlined,
+          'color': const Color(0xFFBBDEFB),
+        };
+      case 'Utility Bills':
+        return {'icon': Icons.bolt_outlined, 'color': const Color(0xFFB3E5FC)};
+      case 'Other':
+      default:
+        return {
+          'icon': Icons.receipt_long_outlined,
+          'color': const Color(0xFFCFD8DC),
+        };
+    }
+  }
+
+  // NEW: Premium Bottom Sheet Category Picker
+  Future<void> _showCategoryPicker() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text(
+                  'Select Category',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: _categories.length,
+                  itemBuilder: (context, index) {
+                    final category = _categories[index];
+                    final style = _getCategoryStyling(category);
+                    return ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: style['color'].withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          style['icon'],
+                          color: style['color'],
+                          size: 18,
+                        ),
+                      ),
+                      title: Text(
+                        category,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      trailing: _selectedCategory == category
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: Colors.teal,
+                              size: 20,
+                            )
+                          : const Icon(
+                              Icons.arrow_forward_ios,
+                              color: Colors.white24,
+                              size: 16,
+                            ),
+                      onTap: () => Navigator.pop(context, category),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedCategory = selected;
+      });
+    }
+  }
+
   Future<void> _saveCorrectedData() async {
     setState(() => _isSaving = true);
 
@@ -107,7 +259,7 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       'merchant_name': _merchantController.text.trim(),
       'date': _dateController.text.trim(),
       'total_amount': double.tryParse(_totalController.text) ?? 0.0,
-      'receipt_category': widget.initialData['receipt_category'] ?? 'Other',
+      'receipt_category': _selectedCategory,
       'tax_amount': widget.initialData['tax_amount'],
       'items': finalItems,
     };
@@ -129,13 +281,14 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
             backgroundColor: Colors.redAccent,
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -143,6 +296,8 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentCategoryStyle = _getCategoryStyling(_selectedCategory);
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
@@ -216,6 +371,50 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                               ),
                             ],
                           ),
+                          const Divider(color: Colors.white12, height: 1),
+
+                          // THE FIX: Clean ListTile Button instead of a Dropdown!
+                          InkWell(
+                            onTap: _showCategoryPicker,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: currentCategoryStyle['color']
+                                          .withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      currentCategoryStyle['icon'],
+                                      color: currentCategoryStyle['color'],
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      _selectedCategory,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.arrow_forward_ios,
+                                    color: Colors.white24,
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -240,7 +439,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                         child: _buildGlassContainer(
                           child: Column(
                             children: [
-                              // Top Row: Item Name + Delete Button
                               Row(
                                 children: [
                                   Expanded(
@@ -261,7 +459,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                                 ],
                               ),
                               const Divider(color: Colors.white12, height: 1),
-                              // Bottom Row: Quantity + Price
                               Row(
                                 children: [
                                   Expanded(
@@ -351,7 +548,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     );
   }
 
-  // Helper widget to generate consistent text fields
   Widget _buildTextField(
     TextEditingController controller,
     String hint,

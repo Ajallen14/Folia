@@ -43,9 +43,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         );
 
         await _cameraController!.initialize();
-        if (mounted) {
-          setState(() => _isInitialized = true);
-        }
+        if (mounted) setState(() => _isInitialized = true);
       }
     } catch (e) {
       debugPrint('Error initializing camera: $e');
@@ -60,9 +58,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Future<void> _takePicture() async {
     if (!_cameraController!.value.isInitialized ||
-        _cameraController!.value.isTakingPicture) {
+        _cameraController!.value.isTakingPicture)
       return;
-    }
 
     try {
       final XFile picture = await _cameraController!.takePicture();
@@ -76,18 +73,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
-    if (image != null) {
+    if (image != null && mounted) {
       _processImage(File(image.path));
     }
   }
 
   Future<void> _processImage(File imageFile) async {
-    setState(() {
-      _isProcessing = true;
-    });
+    setState(() => _isProcessing = true);
 
     try {
-      // 1. OFFLINE ML KIT PARSING
       final inputImage = InputImage.fromFile(imageFile);
       final textRecognizer = TextRecognizer(
         script: TextRecognitionScript.latin,
@@ -95,11 +89,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       final recognizedText = await textRecognizer.processImage(inputImage);
       textRecognizer.close();
 
-      // 2. Feed it to our custom engine!
       final extractedData = ReceiptParser.parse(recognizedText);
 
-      debugPrint('========== OFFLINE EXTRACTION SUCCESS ==========');
-      debugPrint(extractedData.toString());
+      extractedData['receipt_category'] = 'Food & Dining';
 
       if (mounted) {
         Navigator.pushReplacement(
@@ -123,11 +115,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 

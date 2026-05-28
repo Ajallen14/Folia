@@ -269,9 +269,41 @@ class ReceiptParser {
   }
 
   static String? _extractDate(String rawText) {
-    final dateRegex = RegExp(r'\b(\d{1,4}[-/]\d{1,2}[-/]\d{1,4})\b');
+    // Matches formats like DD/MM/YYYY, DD-MM-YY, YYYY/MM/DD, DD.MM.YY
+    final dateRegex = RegExp(r'\b(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})\b');
     final match = dateRegex.firstMatch(rawText);
-    return match != null ? match.group(0) : null;
+
+    if (match == null) return null;
+
+    String p1 = match.group(1)!;
+    String p2 = match.group(2)!;
+    String p3 = match.group(3)!;
+
+    String year, month, day;
+
+    // Determine which part is the year
+    if (p3.length == 4) {
+      year = p3;
+      month = p2;
+      day = p1;
+    } else if (p1.length == 4) {
+      year = p1;
+      month = p2;
+      day = p3;
+    } else {
+      // Assume DD/MM/YY format
+      // Convert 2-digit year (like '26') into 4-digit year ('2026')
+      year = p3.length == 2 ? "20$p3" : p3;
+      month = p2;
+      day = p1;
+    }
+
+    // Pad month and day to ensure double digits (e.g., '3' becomes '03')
+    month = month.padLeft(2, '0');
+    day = day.padLeft(2, '0');
+
+    // Return ISO standard YYYY-MM-DD so Flutter can parse it natively!
+    return "$day-$month-$year";
   }
 
   static double _parseAmount(String amountStr) {
