@@ -22,7 +22,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
   String _selectedCategory = 'Other';
   bool _isSaving = false;
 
-  List<Map<String, dynamic>> _editableItems = [];
+  final List<Map<String, dynamic>> _editableItems = [];
 
   final List<String> _categories = [
     'Groceries',
@@ -185,13 +185,14 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
 
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
             backgroundColor: Colors.redAccent,
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
