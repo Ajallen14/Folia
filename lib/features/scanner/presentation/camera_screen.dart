@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/gemini_provider.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import '../utils/receipt_parser.dart';
 import '../../../core/widgets/processing_overlay.dart';
 import 'receipt_preview_screen.dart';
 
@@ -80,19 +81,29 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     }
   }
 
+  // --- UPDATED: Now uses Offline ML Kit instead of Gemini ---
   Future<void> _processImage(File imageFile) async {
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      // 1. Read the GeminiProvider using Riverpod
-      final gemini = ref.read(geminiProvider);
+      // 1. Initialize ML Kit Text Recognizer
+      final inputImage = InputImage.fromFile(imageFile);
+      final textRecognizer = TextRecognizer(
+        script: TextRecognitionScript.latin,
+      );
 
-      // 2. Send the image to the AI and wait for the JSON
-      final extractedData = await gemini.extractReceiptData(imageFile);
+      // 2. Extract raw text from the image instantly offline
+      final recognizedText = await textRecognizer.processImage(inputImage);
 
-      debugPrint('========== AI EXTRACTION SUCCESS ==========');
+      // Always close the recognizer to free up memory
+      textRecognizer.close();
+
+      // 3. Pass the raw text through your new Regex Heuristic Engine
+      final extractedData = ReceiptParser.parse(recognizedText);
+
+      debugPrint('========== ML KIT EXTRACTION SUCCESS ==========');
       debugPrint(extractedData.toString());
 
       if (mounted) {
@@ -107,7 +118,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         );
       }
     } catch (e) {
-      debugPrint('AI Error: $e');
+      debugPrint('OCR Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

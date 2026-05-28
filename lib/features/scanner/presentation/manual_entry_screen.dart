@@ -7,7 +7,10 @@ import '../../../core/database/database_helper.dart';
 import '../../dashboard/providers/receipt_provider.dart';
 
 class ManualEntryScreen extends ConsumerStatefulWidget {
-  const ManualEntryScreen({super.key});
+  // NEW: Add a parameter to accept the parsed ML Kit data
+  final Map<String, dynamic>? prefilledData;
+
+  const ManualEntryScreen({super.key, this.prefilledData});
 
   @override
   ConsumerState<ManualEntryScreen> createState() => _ManualEntryScreenState();
@@ -36,6 +39,53 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
     'Utility Bills',
     'Other',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    // NEW: Populate controllers automatically if ML Kit found data
+    if (widget.prefilledData != null) {
+      _merchantController.text = widget.prefilledData!['merchant_name'] ?? '';
+
+      final total = widget.prefilledData!['total_amount'];
+      if (total != null && total > 0.0) {
+        _amountController.text = total.toString();
+      }
+
+      // Try to parse the extracted date, fallback to today if it fails
+      final dateStr = widget.prefilledData!['date'];
+      if (dateStr != null) {
+        try {
+          // Normalize slashes to dashes for easier parsing
+          String normalizedDate = dateStr.replaceAll('/', '-');
+          DateTime? parsedDate = DateTime.tryParse(normalizedDate);
+          if (parsedDate != null) {
+            _selectedDate = parsedDate;
+          }
+        } catch (e) {
+          debugPrint("Date parsing failed, defaulting to now: $e");
+        }
+      }
+
+      // Automatically generate the line item text fields
+      final items =
+          widget.prefilledData!['items'] as List<Map<String, dynamic>>?;
+      if (items != null && items.isNotEmpty) {
+        for (var item in items) {
+          _editableItems.add({
+            'nameController': TextEditingController(text: item['name'] ?? ''),
+            'qtyController': TextEditingController(
+              text: (item['quantity'] ?? 1).toString(),
+            ),
+            'priceController': TextEditingController(
+              text: (item['price'] ?? '').toString(),
+            ),
+          });
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -389,10 +439,11 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                                   );
                                 }).toList(),
                                 onChanged: (String? newValue) {
-                                  if (newValue != null)
+                                  if (newValue != null) {
                                     setState(
                                       () => _selectedCategory = newValue,
                                     );
+                                  }
                                 },
                               ),
                             ),
