@@ -271,7 +271,7 @@ class ReceiptParser {
   static String? _extractDate(String rawText) {
     final dateRegex = RegExp(r'\b(\d{1,4}[-/]\d{1,2}[-/]\d{1,4})\b');
     final match = dateRegex.firstMatch(rawText);
-    return match?.group(0);
+    return match != null ? match.group(0) : null;
   }
 
   static double _parseAmount(String amountStr) {
