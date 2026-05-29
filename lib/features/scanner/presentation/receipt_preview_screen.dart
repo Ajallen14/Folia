@@ -291,23 +291,12 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
           barrierColor: Colors.black87,
           builder: (context) {
             return Center(
-              child: Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
-                child: Center(
-                  child: Lottie.asset(
-                    'assets/animations/Save_animation.json',
-                    repeat: false,
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.contain,
-                  ),
-                ),
+              child: Lottie.asset(
+                'assets/animations/Save_animation.json',
+                repeat: false,
+                width: 250,
+                height: 250,
+                fit: BoxFit.contain,
               ),
             );
           },

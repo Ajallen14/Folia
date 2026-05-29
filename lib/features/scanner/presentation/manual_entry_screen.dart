@@ -270,7 +270,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
     }
   }
 
-  // --- NEW SAVING LOGIC WITH LOTTIE ANIMATION ---
+  // --- SAVE LOGIC ---
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
     if (_amountController.text.isEmpty ||
@@ -308,31 +308,19 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
       await DatabaseHelper.instance.saveReceiptFromGemini(manualData, '');
       await ref.read(dashboardProvider.notifier).refreshData();
 
-      // NEW: Show the Lottie Success Dialog
       if (mounted) {
         showDialog(
           context: context,
-          barrierDismissible: false, // Prevents closing it early
+          barrierDismissible: false,
           barrierColor: Colors.black87,
           builder: (context) {
             return Center(
-              child: Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
-                child: Center(
-                  child: Lottie.asset(
-                    'assets/animations/Save_animation.json',
-                    repeat: false,
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.contain,
-                  ),
-                ),
+              child: Lottie.asset(
+                'assets/animations/Save_animation.json',
+                repeat: false,
+                width: 250,
+                height: 250,
+                fit: BoxFit.contain,
               ),
             );
           },
