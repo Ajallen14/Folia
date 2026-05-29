@@ -1,16 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class ReceiptParser {
   static Map<String, dynamic> parse(RecognizedText recognizedText) {
     final lines = _rebuildLinesFromWords(recognizedText);
     final rawText = recognizedText.text;
-
-    // --- DEBUGGING ---
-    debugPrint("=== REBUILT RECEIPT LINES ===");
-    for (var line in lines) debugPrint(line);
-    debugPrint("=============================");
-    // -----------------
 
     if (lines.isEmpty) return {};
 
@@ -111,10 +104,8 @@ class ReceiptParser {
     bool hasReachedTotals = false;
 
     for (String line in lines) {
-      // If we see a total, tax, or footer word...
+      // If we see a total, tax, or footer word
       if (excludeRegex.hasMatch(line)) {
-        // THE FIX: Only drop the gate if we have actually started adding food items!
-        // This stops headers like "Bill No" or "Amount" from triggering the gate too early.
         if (items.isNotEmpty) {
           hasReachedTotals = true;
         }
@@ -269,7 +260,7 @@ class ReceiptParser {
   }
 
   static String? _extractDate(String rawText) {
-    // Matches formats like DD/MM/YYYY, DD-MM-YY, YYYY/MM/DD, DD.MM.YY
+    // Date formats DD/MM/YYYY, DD-MM-YY, YYYY/MM/DD, DD.MM.YY
     final dateRegex = RegExp(r'\b(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})\b');
     final match = dateRegex.firstMatch(rawText);
 
@@ -291,19 +282,15 @@ class ReceiptParser {
       month = p2;
       day = p3;
     } else {
-      // Assume DD/MM/YY format
-      // Convert 2-digit year (like '26') into 4-digit year ('2026')
       year = p3.length == 2 ? "20$p3" : p3;
       month = p2;
       day = p1;
     }
 
-    // Pad month and day to ensure double digits (e.g., '3' becomes '03')
     month = month.padLeft(2, '0');
     day = day.padLeft(2, '0');
 
-    // Return ISO standard YYYY-MM-DD so Flutter can parse it natively!
-    return "$day-$month-$year";
+    return "$year-$month-$day";
   }
 
   static double _parseAmount(String amountStr) {

@@ -1,9 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/database/database_helper.dart';
 import 'split_detail_screen.dart';
 import 'balances_screen.dart';
+import '../../../core/widgets/glass_container.dart';
 
 class SplitsScreen extends StatefulWidget {
   const SplitsScreen({super.key});
@@ -75,18 +75,14 @@ class _SplitsScreenState extends State<SplitsScreen> {
                               color: Colors.black54,
                               size: 18,
                             ),
-
                             onDeleted: p == 'Me'
                                 ? null
-                                : () {
-                                    setModalState(() => people.remove(p));
-                                  },
+                                : () => setModalState(() => people.remove(p)),
                           ),
                         )
                         .toList(),
                   ),
                   const SizedBox(height: 16),
-
                   TextField(
                     controller: textController,
                     style: const TextStyle(color: Colors.white),
@@ -117,7 +113,6 @@ class _SplitsScreenState extends State<SplitsScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
                   SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -132,9 +127,7 @@ class _SplitsScreenState extends State<SplitsScreen> {
                               friends: people,
                             ),
                           ),
-                        ).then(
-                          (_) => setState(() {}),
-                        ); // Refresh when returning
+                        ).then((_) => setState(() {}));
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFE1BEE7),
@@ -183,18 +176,13 @@ class _SplitsScreenState extends State<SplitsScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const BalancesScreen()),
-                  );
-                },
-                child: _buildGlassContainer(
-                  padding: const EdgeInsets.all(8),
-                  child: const Icon(
-                    Icons.people_alt_outlined,
-                    color: Colors.white,
-                  ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BalancesScreen()),
+                ),
+                child: const GlassContainer(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(Icons.people_alt_outlined, color: Colors.white),
                 ),
               ),
             ],
@@ -219,7 +207,6 @@ class _SplitsScreenState extends State<SplitsScreen> {
     );
   }
 
-  // --- TAB 1: READY TO SPLIT ---
   Widget _buildUnsplitTab() {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: DatabaseHelper.instance.getUnsplitReceipts(),
@@ -229,7 +216,6 @@ class _SplitsScreenState extends State<SplitsScreen> {
             child: CircularProgressIndicator(color: Color(0xFFF8BBD0)),
           );
         }
-
         final receipts = snapshot.data ?? [];
 
         if (receipts.isEmpty) {
@@ -279,7 +265,6 @@ class _SplitsScreenState extends State<SplitsScreen> {
     );
   }
 
-  // --- TAB 2: ALREADY SPLITTED ---
   Widget _buildSplittedTab() {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: DatabaseHelper.instance.getSplitHistory(),
@@ -289,7 +274,6 @@ class _SplitsScreenState extends State<SplitsScreen> {
             child: CircularProgressIndicator(color: Color(0xFFE0F7FA)),
           );
         }
-
         final receipts = snapshot.data ?? [];
 
         if (receipts.isEmpty) {
@@ -333,14 +317,12 @@ class _SplitsScreenState extends State<SplitsScreen> {
                 onTap: () async {
                   final existingSplits = await DatabaseHelper.instance
                       .getSavedSplitsForReceipt(receipt['id'].toString());
-
                   Set<String> uniqueNames = {'Me'};
                   for (var split in existingSplits) {
                     if (split['user_name'] != null) {
                       uniqueNames.add(split['user_name']);
                     }
                   }
-
                   if (context.mounted) {
                     _showNameDialog(
                       context,
@@ -357,7 +339,6 @@ class _SplitsScreenState extends State<SplitsScreen> {
     );
   }
 
-  // --- SHARED CARD WIDGET ---
   Widget _buildSplitCard({
     required String merchantName,
     required String date,
@@ -369,121 +350,82 @@ class _SplitsScreenState extends State<SplitsScreen> {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
+      child: GlassContainer(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Container(
+              height: 50,
+              width: 50,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0F7FA).withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.receipt_long, color: Color(0xFFE0F7FA)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0F7FA).withOpacity(0.2),
-                      shape: BoxShape.circle,
+                  Text(
+                    merchantName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
-                    child: const Icon(
-                      Icons.receipt_long,
-                      color: Color(0xFFE0F7FA),
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          merchantName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          date,
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        totalAmount,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: buttonColor,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: buttonColor.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          buttonText,
-                          style: const TextStyle(
-                            color: Colors.black87,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 4),
+                  Text(
+                    date,
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
                   ),
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassContainer({
-    required Widget child,
-    required EdgeInsets padding,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Padding(padding: padding, child: child),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  totalAmount,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: buttonColor,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: buttonColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    buttonText,
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

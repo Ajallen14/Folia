@@ -1,9 +1,12 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lottie/lottie.dart';
+import 'package:intl/intl.dart';
 import '../../../core/database/database_helper.dart';
 import '../../dashboard/providers/receipt_provider.dart';
+import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/glass_text_field.dart';
+import '../../../core/widgets/gradient_button.dart';
 
 class ReceiptPreviewScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> initialData;
@@ -24,12 +27,12 @@ class ReceiptPreviewScreen extends ConsumerStatefulWidget {
 
 class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
   late TextEditingController _merchantController;
-  late TextEditingController _dateController;
   late TextEditingController _totalController;
+
+  DateTime _selectedDate = DateTime.now();
 
   final List<Map<String, dynamic>> _editableItems = [];
   bool _isSaving = false;
-
   String _selectedCategory = 'Other';
 
   final List<String> _categories = [
@@ -51,14 +54,33 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     _merchantController = TextEditingController(
       text: widget.initialData['merchant_name']?.toString(),
     );
-    _dateController = TextEditingController(
-      text:
-          widget.initialData['date'] ??
-          widget.initialData['purchase_date']?.toString(),
-    );
     _totalController = TextEditingController(
       text: widget.initialData['total_amount']?.toString(),
     );
+
+    final dateStr =
+        widget.initialData['date'] ??
+        widget.initialData['purchase_date']?.toString();
+    if (dateStr != null) {
+      try {
+        // 1. Try standard YYYY-MM-DD
+        DateTime? parsedDate = DateTime.tryParse(dateStr.replaceAll('/', '-'));
+
+        // 2. If it fails, fallback to DD-MM-YYYY (For older saved receipts)
+        if (parsedDate == null) {
+          final parts = dateStr.split(RegExp(r'[-/]'));
+          if (parts.length == 3) {
+            parsedDate = DateTime.tryParse(
+              '${parts[2]}-${parts[1]}-${parts[0]}',
+            );
+          }
+        }
+
+        if (parsedDate != null) _selectedDate = parsedDate;
+      } catch (e) {
+        debugPrint("Date parsing failed: $e");
+      }
+    }
 
     if (widget.initialData['receipt_category'] != null &&
         _categories.contains(widget.initialData['receipt_category'])) {
@@ -68,7 +90,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       _selectedCategory = widget.initialData['category_name'];
     }
 
-    // Load existing items if they exist
     if (widget.initialData['items'] != null) {
       for (var item in widget.initialData['items']) {
         _editableItems.add({
@@ -89,7 +110,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
   @override
   void dispose() {
     _merchantController.dispose();
-    _dateController.dispose();
     _totalController.dispose();
     for (var item in _editableItems) {
       item['nameController'].dispose();
@@ -116,6 +136,29 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       item['qtyController'].dispose();
       item['priceController'].dispose();
     });
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFFF8BBD0),
+            onPrimary: Colors.black,
+            surface: Color(0xFF2C2C2E),
+            onSurface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() => _selectedDate = picked);
+    }
   }
 
   Map<String, dynamic> _getCategoryStyling(String category) {
@@ -178,81 +221,74 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text(
-                  'Select Category',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Text(
+                'Select Category',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const Divider(color: Colors.white12, height: 1),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final category = _categories[index];
-                    final style = _getCategoryStyling(category);
-                    return ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: style['color'].withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          style['icon'],
-                          color: style['color'],
-                          size: 18,
-                        ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
+                itemCount: _categories.length,
+                itemBuilder: (context, index) {
+                  final category = _categories[index];
+                  final style = _getCategoryStyling(category);
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: style['color'].withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      title: Text(
-                        category,
-                        style: const TextStyle(color: Colors.white),
+                      child: Icon(
+                        style['icon'],
+                        color: style['color'],
+                        size: 18,
                       ),
-                      trailing: _selectedCategory == category
-                          ? const Icon(
-                              Icons.check_circle,
-                              color: Colors.teal,
-                              size: 20,
-                            )
-                          : const Icon(
-                              Icons.arrow_forward_ios,
-                              color: Colors.white24,
-                              size: 16,
-                            ),
-                      onTap: () => Navigator.pop(context, category),
-                    );
-                  },
-                ),
+                    ),
+                    title: Text(
+                      category,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    trailing: _selectedCategory == category
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: Colors.teal,
+                            size: 20,
+                          )
+                        : const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white24,
+                            size: 16,
+                          ),
+                    onTap: () => Navigator.pop(context, category),
+                  );
+                },
               ),
-            ],
-          ),
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
-
     if (selected != null && mounted) {
-      setState(() {
-        _selectedCategory = selected;
-      });
+      setState(() => _selectedCategory = selected);
     }
   }
 
-  // --- SAVE LOGIC ---
   Future<void> _saveCorrectedData() async {
     setState(() => _isSaving = true);
-
     List<Map<String, dynamic>> finalItems = _editableItems.map((item) {
       return {
         'item_name': item['nameController'].text.trim(),
@@ -263,7 +299,7 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
 
     Map<String, dynamic> finalData = {
       'merchant_name': _merchantController.text.trim(),
-      'date': _dateController.text.trim(),
+      'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
       'total_amount': double.tryParse(_totalController.text) ?? 0.0,
       'receipt_category': _selectedCategory,
       'items': finalItems,
@@ -289,21 +325,17 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
           context: context,
           barrierDismissible: false,
           barrierColor: Colors.black87,
-          builder: (context) {
-            return Center(
-              child: Lottie.asset(
-                'assets/animations/Save_animation.json',
-                repeat: false,
-                width: 250,
-                height: 250,
-                fit: BoxFit.contain,
-              ),
-            );
-          },
+          builder: (context) => Center(
+            child: Lottie.asset(
+              'assets/Save_animation.json',
+              repeat: false,
+              width: 250,
+              height: 250,
+              fit: BoxFit.contain,
+            ),
+          ),
         );
-
         await Future.delayed(const Duration(seconds: 2));
-
         if (mounted) {
           Navigator.of(context).pop();
           Navigator.of(context).pop();
@@ -366,22 +398,47 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildGlassContainer(
+                    GlassContainer(
                       child: Column(
                         children: [
-                          _buildTextField(
-                            _merchantController,
-                            'Merchant Name',
-                            Icons.storefront_outlined,
+                          GlassTextField(
+                            controller: _merchantController,
+                            hint: 'Merchant Name',
+                            icon: Icons.storefront_outlined,
                           ),
                           const Divider(color: Colors.white12, height: 1),
                           Row(
                             children: [
                               Expanded(
-                                child: _buildTextField(
-                                  _dateController,
-                                  'YYYY-MM-DD',
-                                  Icons.calendar_today_outlined,
+                                child: InkWell(
+                                  onTap: () => _selectDate(context),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 15,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.calendar_today_outlined,
+                                          color: Colors.white54,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Text(
+                                            DateFormat(
+                                              'dd-MM-yyyy',
+                                            ).format(_selectedDate),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                               Container(
@@ -390,17 +447,16 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                                 color: Colors.white12,
                               ),
                               Expanded(
-                                child: _buildTextField(
-                                  _totalController,
-                                  'Total (₹)',
-                                  Icons.currency_rupee_outlined,
+                                child: GlassTextField(
+                                  controller: _totalController,
+                                  hint: 'Total (₹)',
+                                  icon: Icons.currency_rupee_outlined,
                                   isNumber: true,
                                 ),
                               ),
                             ],
                           ),
                           const Divider(color: Colors.white12, height: 1),
-
                           InkWell(
                             onTap: _showCategoryPicker,
                             child: Padding(
@@ -462,16 +518,16 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                       var item = entry.value;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
-                        child: _buildGlassContainer(
+                        child: GlassContainer(
                           child: Column(
                             children: [
                               Row(
                                 children: [
                                   Expanded(
-                                    child: _buildTextField(
-                                      item['nameController'],
-                                      'Item Name',
-                                      Icons.fastfood_outlined,
+                                    child: GlassTextField(
+                                      controller: item['nameController'],
+                                      hint: 'Item Name',
+                                      icon: Icons.fastfood_outlined,
                                     ),
                                   ),
                                   IconButton(
@@ -489,10 +545,9 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                                 children: [
                                   Expanded(
                                     flex: 1,
-                                    child: _buildTextField(
-                                      item['qtyController'],
-                                      'Qty',
-                                      Icons.numbers_rounded,
+                                    child: GlassTextField(
+                                      controller: item['qtyController'],
+                                      hint: 'Qty',
                                       isNumber: true,
                                       isCenter: true,
                                     ),
@@ -504,10 +559,10 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                                   ),
                                   Expanded(
                                     flex: 2,
-                                    child: _buildTextField(
-                                      item['priceController'],
-                                      'Total Price',
-                                      Icons.currency_rupee_outlined,
+                                    child: GlassTextField(
+                                      controller: item['priceController'],
+                                      hint: 'Total Price',
+                                      icon: Icons.currency_rupee_outlined,
                                       isNumber: true,
                                     ),
                                   ),
@@ -525,97 +580,13 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
 
             Padding(
               padding: const EdgeInsets.all(24),
-              child: GestureDetector(
-                onTap: _isSaving ? null : _saveCorrectedData,
-                child: Container(
-                  height: 60,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE0F7FA), Color(0xFFF8BBD0)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFF8BBD0).withOpacity(0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.black87,
-                              strokeWidth: 3,
-                            ),
-                          )
-                        : Text(
-                            widget.isEditing
-                                ? 'Save Changes'
-                                : 'Confirm & Save',
-                            style: const TextStyle(
-                              color: Colors.black87,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
-                ),
+              child: GradientButton(
+                text: widget.isEditing ? 'Save Changes' : 'Confirm & Save',
+                isLoading: _isSaving,
+                onPressed: _saveCorrectedData,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String hint,
-    IconData icon, {
-    bool isNumber = false,
-    bool isCenter = false,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: isNumber
-          ? const TextInputType.numberWithOptions(decimal: true)
-          : TextInputType.text,
-      textAlign: isCenter ? TextAlign.center : TextAlign.start,
-      style: const TextStyle(color: Colors.white, fontSize: 16),
-      decoration: InputDecoration(
-        prefixIcon: isCenter
-            ? null
-            : Icon(icon, color: Colors.white54, size: 20),
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white38),
-        border: InputBorder.none,
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: isCenter ? 15 : 12,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassContainer({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: child,
         ),
       ),
     );

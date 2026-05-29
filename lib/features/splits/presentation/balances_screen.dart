@@ -139,7 +139,6 @@ class _BalancesScreenState extends State<BalancesScreen> {
         _splitsToShare = splits;
       });
 
-      // Give the hidden widget time to render
       await Future.delayed(const Duration(milliseconds: 150));
 
       RenderRepaintBoundary boundary =

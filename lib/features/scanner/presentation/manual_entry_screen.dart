@@ -1,17 +1,17 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:lottie/lottie.dart'; // NEW: Lottie import added here
+import 'package:lottie/lottie.dart';
 import '../../../core/database/database_helper.dart';
 import '../../dashboard/providers/receipt_provider.dart';
+import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/glass_text_field.dart';
+import '../../../core/widgets/gradient_button.dart';
 
 class ManualEntryScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic>? prefilledData;
-
   const ManualEntryScreen({super.key, this.prefilledData});
-
   @override
   ConsumerState<ManualEntryScreen> createState() => _ManualEntryScreenState();
 }
@@ -26,7 +26,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
   bool _isSaving = false;
 
   final List<Map<String, dynamic>> _editableItems = [];
-
   final List<String> _categories = [
     'Groceries',
     'Food & Dining',
@@ -43,10 +42,8 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
   @override
   void initState() {
     super.initState();
-
     if (widget.prefilledData != null) {
       _merchantController.text = widget.prefilledData!['merchant_name'] ?? '';
-
       final total = widget.prefilledData!['total_amount'];
       if (total != null && total > 0.0) {
         _amountController.text = total.toString();
@@ -54,15 +51,10 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
 
       final dateStr = widget.prefilledData!['date'];
       if (dateStr != null) {
-        try {
-          String normalizedDate = dateStr.replaceAll('/', '-');
-          DateTime? parsedDate = DateTime.tryParse(normalizedDate);
-          if (parsedDate != null) {
-            _selectedDate = parsedDate;
-          }
-        } catch (e) {
-          debugPrint("Date parsing failed, defaulting to now: $e");
-        }
+          DateTime? parsedDate = DateTime.tryParse(
+            dateStr.replaceAll('/', '-'),
+          );
+          if (parsedDate != null) _selectedDate = parsedDate;
       }
 
       final items =
@@ -174,74 +166,69 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text(
-                  'Select Category',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Text(
+                'Select Category',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const Divider(color: Colors.white12, height: 1),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final category = _categories[index];
-                    final style = _getCategoryStyling(category);
-                    return ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: style['color'].withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          style['icon'],
-                          color: style['color'],
-                          size: 18,
-                        ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
+                itemCount: _categories.length,
+                itemBuilder: (context, index) {
+                  final category = _categories[index];
+                  final style = _getCategoryStyling(category);
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: style['color'].withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      title: Text(
-                        category,
-                        style: const TextStyle(color: Colors.white),
+                      child: Icon(
+                        style['icon'],
+                        color: style['color'],
+                        size: 18,
                       ),
-                      trailing: _selectedCategory == category
-                          ? const Icon(
-                              Icons.check_circle,
-                              color: Colors.teal,
-                              size: 20,
-                            )
-                          : const Icon(
-                              Icons.arrow_forward_ios,
-                              color: Colors.white24,
-                              size: 16,
-                            ),
-                      onTap: () => Navigator.pop(context, category),
-                    );
-                  },
-                ),
+                    ),
+                    title: Text(
+                      category,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    trailing: _selectedCategory == category
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: Colors.teal,
+                            size: 20,
+                          )
+                        : const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white24,
+                            size: 16,
+                          ),
+                    onTap: () => Navigator.pop(context, category),
+                  );
+                },
               ),
-            ],
-          ),
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
-
     if (selected != null && mounted) {
-      setState(() {
-        _selectedCategory = selected;
-      });
+      setState(() => _selectedCategory = selected);
     }
   }
 
@@ -251,26 +238,23 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFFF8BBD0),
-              onPrimary: Colors.black,
-              surface: Color(0xFF2C2C2E),
-              onSurface: Colors.white,
-            ),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFFF8BBD0),
+            onPrimary: Colors.black,
+            surface: Color(0xFF2C2C2E),
+            onSurface: Colors.white,
           ),
-          child: child!,
-        );
-      },
+        ),
+        child: child!,
+      ),
     );
     if (picked != null && picked != _selectedDate) {
       setState(() => _selectedDate = picked);
     }
   }
 
-  // --- SAVE LOGIC ---
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
     if (_amountController.text.isEmpty ||
@@ -285,7 +269,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
     }
 
     setState(() => _isSaving = true);
-
     try {
       List<Map<String, dynamic>> finalItems = _editableItems.map((item) {
         return {
@@ -313,21 +296,17 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
           context: context,
           barrierDismissible: false,
           barrierColor: Colors.black87,
-          builder: (context) {
-            return Center(
-              child: Lottie.asset(
-                'assets/animations/Save_animation.json',
-                repeat: false,
-                width: 250,
-                height: 250,
-                fit: BoxFit.contain,
-              ),
-            );
-          },
+          builder: (context) => Center(
+            child: Lottie.asset(
+              'assets/Save_animation.json',
+              repeat: false,
+              width: 250,
+              height: 250,
+              fit: BoxFit.contain,
+            ),
+          ),
         );
-
         await Future.delayed(const Duration(seconds: 2));
-
         if (mounted) {
           Navigator.of(context).pop();
           Navigator.of(context).pop();
@@ -387,7 +366,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                     vertical: 20.0,
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const Text(
                         'Total Bill Amount',
@@ -438,32 +416,17 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                       ),
                       const SizedBox(height: 40),
 
-                      _buildGlassContainer(
+                      GlassContainer(
                         child: Column(
                           children: [
-                            TextFormField(
+                            GlassTextField(
                               controller: _merchantController,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
+                              hint: 'Merchant Name',
+                              icon: Icons.storefront_outlined,
                               validator: (value) =>
                                   value == null || value.isEmpty
                                   ? 'Required'
                                   : null,
-                              decoration: const InputDecoration(
-                                hintText: 'Merchant Name',
-                                hintStyle: TextStyle(color: Colors.white38),
-                                prefixIcon: Icon(
-                                  Icons.storefront_outlined,
-                                  color: Colors.white54,
-                                ),
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 20,
-                                ),
-                              ),
                             ),
                             const Divider(color: Colors.white12, height: 1),
                             ListTile(
@@ -490,7 +453,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                               onTap: () => _selectDate(context),
                             ),
                             const Divider(color: Colors.white12, height: 1),
-
                             InkWell(
                               onTap: _showCategoryPicker,
                               child: Padding(
@@ -535,8 +497,8 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 30),
+
                       const Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
@@ -556,16 +518,16 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                           var item = entry.value;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 16),
-                            child: _buildGlassContainer(
+                            child: GlassContainer(
                               child: Column(
                                 children: [
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: _buildTextField(
-                                          item['nameController'],
-                                          'Item Name',
-                                          Icons.fastfood_outlined,
+                                        child: GlassTextField(
+                                          controller: item['nameController'],
+                                          hint: 'Item Name',
+                                          icon: Icons.fastfood_outlined,
                                         ),
                                       ),
                                       IconButton(
@@ -586,10 +548,9 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                                     children: [
                                       Expanded(
                                         flex: 1,
-                                        child: _buildTextField(
-                                          item['qtyController'],
-                                          'Qty',
-                                          Icons.numbers_rounded,
+                                        child: GlassTextField(
+                                          controller: item['qtyController'],
+                                          hint: 'Qty',
                                           isNumber: true,
                                           isCenter: true,
                                         ),
@@ -601,10 +562,10 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                                       ),
                                       Expanded(
                                         flex: 2,
-                                        child: _buildTextField(
-                                          item['priceController'],
-                                          'Total Price',
-                                          Icons.currency_rupee_outlined,
+                                        child: GlassTextField(
+                                          controller: item['priceController'],
+                                          hint: 'Total Price',
+                                          icon: Icons.currency_rupee_outlined,
                                           isNumber: true,
                                         ),
                                       ),
@@ -653,99 +614,17 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                   ),
                 ),
               ),
-
+            
               Padding(
                 padding: const EdgeInsets.all(24.0),
-                child: GestureDetector(
-                  onTap: _isSaving ? null : _saveExpense,
-                  child: Container(
-                    height: 60,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFE0F7FA), Color(0xFFF8BBD0)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFF8BBD0).withOpacity(0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: _isSaving
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.black87,
-                                strokeWidth: 3,
-                              ),
-                            )
-                          : const Text(
-                              'Save Expense',
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                    ),
-                  ),
+                child: GradientButton(
+                  text: 'Save Expense',
+                  isLoading: _isSaving,
+                  onPressed: _saveExpense,
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String hint,
-    IconData icon, {
-    bool isNumber = false,
-    bool isCenter = false,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: isNumber
-          ? const TextInputType.numberWithOptions(decimal: true)
-          : TextInputType.text,
-      textAlign: isCenter ? TextAlign.center : TextAlign.start,
-      style: const TextStyle(color: Colors.white, fontSize: 16),
-      decoration: InputDecoration(
-        prefixIcon: isCenter
-            ? null
-            : Icon(icon, color: Colors.white54, size: 20),
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white38),
-        border: InputBorder.none,
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: isCenter ? 15 : 12,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassContainer({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: child,
         ),
       ),
     );

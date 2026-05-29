@@ -1,7 +1,8 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/database/database_helper.dart';
+import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/gradient_button.dart';
 
 class SplitDetailScreen extends StatefulWidget {
   final Map<String, dynamic> receipt;
@@ -32,9 +33,7 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
   }
 
   Future<void> _loadItems() async {
-    final items = await DatabaseHelper.instance.getLineItems(
-      widget.receipt['id'],
-    );
+    final items = await DatabaseHelper.instance.getLineItems(widget.receipt['id']);
     setState(() {
       _lineItems = items;
       _isLoading = false;
@@ -74,16 +73,11 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
   double _calculateOwedForItem(Map<String, dynamic> item, String person) {
     final itemId = item['id'];
     final assignedTo = _itemAssignments[itemId]!;
-
     final int totalQty = (item['quantity'] as num?)?.toInt() ?? 1;
     final double totalPrice = (item['price'] as num).toDouble();
 
-    if (assignedTo.isEmpty) {
-      return totalPrice / widget.friends.length;
-    }
-
+    if (assignedTo.isEmpty) return totalPrice / widget.friends.length;
     if (!assignedTo.contains(person)) return 0.0;
-
     if (totalQty <= 1) return totalPrice / assignedTo.length;
 
     final allocations = _itemQtyAllocations[itemId]!;
@@ -93,14 +87,12 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
 
     final double unitPrice = totalPrice / totalQty;
     final int myAllocated = allocations[person] ?? 0;
-
     double owed = (myAllocated * unitPrice).toDouble();
-
     final int remainderQty = totalQty - sumAllocated;
+    
     if (remainderQty > 0) {
       owed += (remainderQty * unitPrice) / assignedTo.length;
     }
-
     return owed;
   }
 
@@ -123,38 +115,19 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
       for (var person in peopleToCharge) {
         final owed = _calculateOwedForItem(item, person);
         if (owed > 0) {
-          splitsToSave.add({
-            'line_item_id': item['id'],
-            'user_name': person,
-            'owed_amount': owed,
-          });
+          splitsToSave.add({'line_item_id': item['id'], 'user_name': person, 'owed_amount': owed});
         }
       }
     }
 
     try {
-      await DatabaseHelper.instance.saveSplits(
-        widget.receipt['id'],
-        splitsToSave,
-      );
+      await DatabaseHelper.instance.saveSplits(widget.receipt['id'], splitsToSave);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Splits saved successfully!'),
-            backgroundColor: Colors.teal,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Splits saved successfully!'), backgroundColor: Colors.teal));
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving splits: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving splits: $e'), backgroundColor: Colors.redAccent));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -162,10 +135,7 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final formattedTotal = NumberFormat.currency(
-      symbol: '₹',
-      decimalDigits: 2,
-    ).format(widget.receipt['total_amount']);
+    final formattedTotal = NumberFormat.currency(symbol: '₹', decimalDigits: 2).format(widget.receipt['total_amount']);
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -176,32 +146,13 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
               padding: const EdgeInsets.all(20.0),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
+                  IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          widget.receipt['merchant_name'],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          formattedTotal,
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 14,
-                          ),
-                        ),
+                        Text(widget.receipt['merchant_name'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(formattedTotal, style: const TextStyle(color: Colors.white54, fontSize: 14)),
                       ],
                     ),
                   ),
@@ -211,20 +162,9 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
             ),
 
             if (_isLoading)
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(color: Color(0xFFF8BBD0)),
-                ),
-              )
+              const Expanded(child: Center(child: CircularProgressIndicator(color: Color(0xFFF8BBD0))))
             else if (_lineItems.isEmpty)
-              const Expanded(
-                child: Center(
-                  child: Text(
-                    'No line items found.',
-                    style: TextStyle(color: Colors.white54),
-                  ),
-                ),
-              )
+              const Expanded(child: Center(child: Text('No line items found.', style: TextStyle(color: Colors.white54))))
             else
               Expanded(
                 child: ListView.builder(
@@ -234,16 +174,13 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
                   itemBuilder: (context, index) {
                     final item = _lineItems[index];
                     final itemId = item['id'];
-                    final price = NumberFormat.currency(
-                      symbol: '₹',
-                      decimalDigits: 2,
-                    ).format(item['price']);
+                    final price = NumberFormat.currency(symbol: '₹', decimalDigits: 2).format(item['price']);
                     final qty = (item['quantity'] as num?)?.toInt() ?? 1;
                     final assignedTo = _itemAssignments[itemId]!;
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildGlassContainer(
+                      child: GlassContainer(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,24 +188,8 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    '${qty}x  ${item['item_name']}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  price,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                Expanded(child: Text('${qty}x  ${item['item_name']}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600))),
+                                Text(price, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -279,130 +200,41 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: widget.friends.map((friend) {
-                                  final isSelected = assignedTo.contains(
-                                    friend,
-                                  );
-                                  final allocatedQty =
-                                      _itemQtyAllocations[itemId]?[friend] ?? 0;
+                                  final isSelected = assignedTo.contains(friend);
+                                  final allocatedQty = _itemQtyAllocations[itemId]?[friend] ?? 0;
 
                                   return GestureDetector(
-                                    onTap: () =>
-                                        _toggleAssignment(itemId, friend),
+                                    onTap: () => _toggleAssignment(itemId, friend),
                                     child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
+                                      duration: const Duration(milliseconds: 200),
                                       margin: const EdgeInsets.only(right: 8),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 12,
-                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                       decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? const Color(0xFFF8BBD0)
-                                            : Colors.white.withOpacity(0.05),
+                                        color: isSelected ? const Color(0xFFF8BBD0) : Colors.white.withOpacity(0.05),
                                         borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? const Color(0xFFF8BBD0)
-                                              : Colors.white.withOpacity(0.1),
-                                        ),
+                                        border: Border.all(color: isSelected ? const Color(0xFFF8BBD0) : Colors.white.withOpacity(0.1)),
                                       ),
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(
-                                            friend,
-                                            style: TextStyle(
-                                              color: isSelected
-                                                  ? Colors.black87
-                                                  : Colors.white54,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              fontSize: 14,
-                                            ),
-                                          ),
+                                          Text(friend, style: TextStyle(color: isSelected ? Colors.black87 : Colors.white54, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 14)),
                                           if (isSelected && qty > 1) ...[
                                             const SizedBox(height: 8),
                                             Container(
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withOpacity(
-                                                  0.1,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
+                                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   GestureDetector(
-                                                    onTap: () =>
-                                                        _adjustAllocation(
-                                                          itemId,
-                                                          friend,
-                                                          -1,
-                                                          qty,
-                                                        ),
-                                                    behavior:
-                                                        HitTestBehavior.opaque,
-                                                    child: const Padding(
-                                                      padding:
-                                                          EdgeInsets.symmetric(
-                                                            horizontal: 16,
-                                                            vertical: 6,
-                                                          ),
-                                                      child: Text(
-                                                        '-',
-                                                        style: TextStyle(
-                                                          color: Colors.black87,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 18,
-                                                        ),
-                                                      ),
-                                                    ),
+                                                    onTap: () => _adjustAllocation(itemId, friend, -1, qty),
+                                                    behavior: HitTestBehavior.opaque,
+                                                    child: const Padding(padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: Text('-', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18))),
                                                   ),
-                                                  SizedBox(
-                                                    width: 16,
-                                                    child: Text(
-                                                      '$allocatedQty',
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      style: const TextStyle(
-                                                        color: Colors.black87,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                  ),
+                                                  SizedBox(width: 16, child: Text('$allocatedQty', textAlign: TextAlign.center, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14))),
                                                   GestureDetector(
-                                                    onTap: () =>
-                                                        _adjustAllocation(
-                                                          itemId,
-                                                          friend,
-                                                          1,
-                                                          qty,
-                                                        ),
-                                                    behavior:
-                                                        HitTestBehavior.opaque,
-                                                    child: const Padding(
-                                                      padding:
-                                                          EdgeInsets.symmetric(
-                                                            horizontal: 16,
-                                                            vertical: 6,
-                                                          ),
-                                                      child: Text(
-                                                        '+',
-                                                        style: TextStyle(
-                                                          color: Colors.black87,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 18,
-                                                        ),
-                                                      ),
-                                                    ),
+                                                    onTap: () => _adjustAllocation(itemId, friend, 1, qty),
+                                                    behavior: HitTestBehavior.opaque,
+                                                    child: const Padding(padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: Text('+', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18))),
                                                   ),
                                                 ],
                                               ),
@@ -427,16 +259,8 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E1E1E),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(30),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 20,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, -5))],
               ),
               child: SafeArea(
                 child: Column(
@@ -446,30 +270,14 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: widget.friends.map((friend) {
-                          final total = NumberFormat.currency(
-                            symbol: '₹',
-                            decimalDigits: 0,
-                          ).format(_calculateTotalFor(friend));
+                          final total = NumberFormat.currency(symbol: '₹', decimalDigits: 0).format(_calculateTotalFor(friend));
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: Column(
                               children: [
-                                Text(
-                                  friend,
-                                  style: const TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 12,
-                                  ),
-                                ),
+                                Text(friend, style: const TextStyle(color: Colors.white54, fontSize: 12)),
                                 const SizedBox(height: 4),
-                                Text(
-                                  total,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                Text(total, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           );
@@ -477,61 +285,17 @@ class _SplitDetailScreenState extends State<SplitDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 55,
-                      child: ElevatedButton(
-                        onPressed: _isSaving ? null : _saveSplits,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE0F7FA),
-                          foregroundColor: Colors.black87,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.black87,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Save Splits',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      ),
+                    
+                    GradientButton(
+                      text: 'Save Splits',
+                      isLoading: _isSaving,
+                      onPressed: _saveSplits,
                     ),
                   ],
                 ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassContainer({
-    required Widget child,
-    required EdgeInsets padding,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Padding(padding: padding, child: child),
         ),
       ),
     );
