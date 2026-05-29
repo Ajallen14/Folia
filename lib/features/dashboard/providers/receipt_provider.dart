@@ -66,13 +66,15 @@ class ReceiptNotifier extends StateNotifier<DashboardState> {
         if (date.month == now.month && date.year == now.year) include = true;
       } else if (filter == ExpenseFilter.lastMonth) {
         if (date.month == lastMonthDate.month &&
-            date.year == lastMonthDate.year)
+            date.year == lastMonthDate.year) {
           include = true;
+        }
       } else if (filter == ExpenseFilter.today) {
         if (date.year == now.year &&
             date.month == now.month &&
-            date.day == now.day)
+            date.day == now.day) {
           include = true;
+        }
       }
 
       if (include) {

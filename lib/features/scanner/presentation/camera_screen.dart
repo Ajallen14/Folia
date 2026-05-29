@@ -28,7 +28,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Future<void> _initCamera() async {
-    try {
       _cameras = await availableCameras();
       if (_cameras != null && _cameras!.isNotEmpty) {
         final backCamera = _cameras!.firstWhere(
@@ -45,9 +44,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         await _cameraController!.initialize();
         if (mounted) setState(() => _isInitialized = true);
       }
-    } catch (e) {
-      debugPrint('Error initializing camera: $e');
-    }
+
   }
 
   @override
@@ -58,15 +55,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Future<void> _takePicture() async {
     if (!_cameraController!.value.isInitialized ||
-        _cameraController!.value.isTakingPicture)
+        _cameraController!.value.isTakingPicture) {
       return;
-
-    try {
+    }
       final XFile picture = await _cameraController!.takePicture();
       _processImage(File(picture.path));
-    } catch (e) {
-      debugPrint('Error taking picture: $e');
-    }
   }
 
   Future<void> _pickFromGallery() async {
@@ -105,7 +98,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         );
       }
     } catch (e) {
-      debugPrint('OCR Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

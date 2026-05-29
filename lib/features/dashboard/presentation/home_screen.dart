@@ -7,7 +7,7 @@ import '../providers/receipt_provider.dart';
 import 'widgets/budget_section.dart';
 import 'widgets/receipt_list_item.dart';
 import '../../scanner/presentation/receipt_preview_screen.dart';
-import '../../../../core/database/database_helper.dart'; 
+import '../../../../core/database/database_helper.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
