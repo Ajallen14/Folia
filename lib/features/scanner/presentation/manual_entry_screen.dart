@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart'; // NEW: Lottie import added here
 import '../../../core/database/database_helper.dart';
 import '../../dashboard/providers/receipt_provider.dart';
 
@@ -166,7 +167,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
     }
   }
 
-  // NEW: Premium Bottom Sheet Category Picker (Same as Review Screen)
   Future<void> _showCategoryPicker() async {
     final selected = await showModalBottomSheet<String>(
       context: context,
@@ -270,6 +270,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
     }
   }
 
+  // --- NEW SAVING LOGIC WITH LOTTIE ANIMATION ---
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
     if (_amountController.text.isEmpty ||
@@ -307,7 +308,43 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
       await DatabaseHelper.instance.saveReceiptFromGemini(manualData, '');
       await ref.read(dashboardProvider.notifier).refreshData();
 
-      if (mounted) Navigator.pop(context);
+      // NEW: Show the Lottie Success Dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false, // Prevents closing it early
+          barrierColor: Colors.black87,
+          builder: (context) {
+            return Center(
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Center(
+                  child: Lottie.asset(
+                    'assets/animations/Save_animation.json',
+                    repeat: false,
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+
+        await Future.delayed(const Duration(seconds: 2));
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          Navigator.of(context).pop();
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -466,7 +503,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                             ),
                             const Divider(color: Colors.white12, height: 1),
 
-                            // NEW: Sleek Category Button Picker
                             InkWell(
                               onTap: _showCategoryPicker,
                               child: Padding(
@@ -526,7 +562,6 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Dynamic Manual Items List
                       if (_editableItems.isNotEmpty) ...[
                         ..._editableItems.asMap().entries.map((entry) {
                           int index = entry.key;

@@ -174,12 +174,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   );
                                 },
 
-                                // --- THE ULTIMATE FIX: InkWell + Error Catching ---
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(20),
                                   onTap: () async {
                                     try {
-                                      // THE FIX: Treat the ID as a String!
                                       String receiptId =
                                           receipt['id']?.toString() ?? '';
 

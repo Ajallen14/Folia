@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lottie/lottie.dart';
 import '../../../core/database/database_helper.dart';
 import '../../dashboard/providers/receipt_provider.dart';
 
@@ -26,7 +27,7 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
   late TextEditingController _dateController;
   late TextEditingController _totalController;
 
-  List<Map<String, dynamic>> _editableItems = [];
+  final List<Map<String, dynamic>> _editableItems = [];
   bool _isSaving = false;
 
   String _selectedCategory = 'Other';
@@ -64,11 +65,10 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       _selectedCategory = widget.initialData['receipt_category'];
     } else if (widget.initialData['category_name'] != null &&
         _categories.contains(widget.initialData['category_name'])) {
-      // Fallback for database column name
       _selectedCategory = widget.initialData['category_name'];
     }
 
-    // THE FIX: Correctly map the items from the database into the text controllers
+    // Load existing items if they exist
     if (widget.initialData['items'] != null) {
       for (var item in widget.initialData['items']) {
         _editableItems.add({
@@ -249,6 +249,7 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     }
   }
 
+  // --- SAVE LOGIC ---
   Future<void> _saveCorrectedData() async {
     setState(() => _isSaving = true);
 
@@ -269,10 +270,9 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     };
 
     try {
-      // THE FIX: Branch logic based on whether we are editing or creating new!
       if (widget.isEditing && widget.initialData.containsKey('id')) {
         await DatabaseHelper.instance.updateReceipt(
-          widget.initialData['id'],
+          widget.initialData['id'].toString(),
           finalData,
         );
       } else {
@@ -285,17 +285,40 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       await ref.read(dashboardProvider.notifier).refreshData();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isEditing
-                  ? 'Receipt updated!'
-                  : 'Receipt saved successfully!',
-            ),
-            backgroundColor: Colors.teal,
-          ),
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black87,
+          builder: (context) {
+            return Center(
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Center(
+                  child: Lottie.asset(
+                    'assets/animations/Save_animation.json',
+                    repeat: false,
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            );
+          },
         );
-        Navigator.pop(context);
+
+        await Future.delayed(const Duration(seconds: 2));
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -325,7 +348,7 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          widget.isEditing ? 'Edit Receipt' : 'Review Receipt', // Dynamic Title
+          widget.isEditing ? 'Edit Receipt' : 'Review Receipt',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 18,
