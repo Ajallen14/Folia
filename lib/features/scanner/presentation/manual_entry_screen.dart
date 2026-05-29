@@ -51,10 +51,8 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
 
       final dateStr = widget.prefilledData!['date'];
       if (dateStr != null) {
-          DateTime? parsedDate = DateTime.tryParse(
-            dateStr.replaceAll('/', '-'),
-          );
-          if (parsedDate != null) _selectedDate = parsedDate;
+        DateTime? parsedDate = DateTime.tryParse(dateStr.replaceAll('/', '-'));
+        if (parsedDate != null) _selectedDate = parsedDate;
       }
 
       final items =
@@ -298,7 +296,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
           barrierColor: Colors.black87,
           builder: (context) => Center(
             child: Lottie.asset(
-              'assets/Save_animation.json',
+              'assets/animations/Save_animation.json',
               repeat: false,
               width: 250,
               height: 250,
@@ -614,7 +612,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                   ),
                 ),
               ),
-            
+
               Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: GradientButton(

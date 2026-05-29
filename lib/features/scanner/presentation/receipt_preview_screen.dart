@@ -327,7 +327,7 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
           barrierColor: Colors.black87,
           builder: (context) => Center(
             child: Lottie.asset(
-              'assets/Save_animation.json',
+              'assets/animations/Save_animation.json',
               repeat: false,
               width: 250,
               height: 250,
