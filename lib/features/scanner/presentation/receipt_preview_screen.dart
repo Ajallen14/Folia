@@ -51,7 +51,9 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       text: widget.initialData['merchant_name']?.toString(),
     );
     _dateController = TextEditingController(
-      text: widget.initialData['date']?.toString(),
+      text:
+          widget.initialData['date'] ??
+          widget.initialData['purchase_date']?.toString(),
     );
     _totalController = TextEditingController(
       text: widget.initialData['total_amount']?.toString(),
@@ -60,21 +62,25 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     if (widget.initialData['receipt_category'] != null &&
         _categories.contains(widget.initialData['receipt_category'])) {
       _selectedCategory = widget.initialData['receipt_category'];
+    } else if (widget.initialData['category_name'] != null &&
+        _categories.contains(widget.initialData['category_name'])) {
+      // Fallback for database column name
+      _selectedCategory = widget.initialData['category_name'];
     }
 
+    // THE FIX: Correctly map the items from the database into the text controllers
     if (widget.initialData['items'] != null) {
       for (var item in widget.initialData['items']) {
         _editableItems.add({
           'nameController': TextEditingController(
-            text: item['item_name']?.toString(),
+            text: (item['item_name'] ?? item['name'])?.toString() ?? '',
           ),
           'qtyController': TextEditingController(
             text: (item['quantity'] ?? 1).toString(),
           ),
           'priceController': TextEditingController(
-            text: item['price']?.toString(),
+            text: (item['price'] ?? 0.0).toString(),
           ),
-          'category': item['category'] ?? 'Other',
         });
       }
     }
@@ -99,7 +105,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
         'nameController': TextEditingController(),
         'qtyController': TextEditingController(text: '1'),
         'priceController': TextEditingController(),
-        'category': 'Other',
       });
     });
   }
@@ -166,7 +171,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
     }
   }
 
-  // NEW: Premium Bottom Sheet Category Picker
   Future<void> _showCategoryPicker() async {
     final selected = await showModalBottomSheet<String>(
       context: context,
@@ -253,7 +257,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
         'item_name': item['nameController'].text.trim(),
         'quantity': int.tryParse(item['qtyController'].text) ?? 1,
         'price': double.tryParse(item['priceController'].text) ?? 0.0,
-        'category': item['category'],
       };
     }).toList();
 
@@ -262,21 +265,33 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
       'date': _dateController.text.trim(),
       'total_amount': double.tryParse(_totalController.text) ?? 0.0,
       'receipt_category': _selectedCategory,
-      'tax_amount': widget.initialData['tax_amount'],
       'items': finalItems,
     };
 
     try {
-      await DatabaseHelper.instance.saveReceiptFromGemini(
-        finalData,
-        widget.imagePath,
-      );
+      // THE FIX: Branch logic based on whether we are editing or creating new!
+      if (widget.isEditing && widget.initialData.containsKey('id')) {
+        await DatabaseHelper.instance.updateReceipt(
+          widget.initialData['id'],
+          finalData,
+        );
+      } else {
+        await DatabaseHelper.instance.saveReceiptFromGemini(
+          finalData,
+          widget.imagePath,
+        );
+      }
+
       await ref.read(dashboardProvider.notifier).refreshData();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Receipt saved successfully!'),
+          SnackBar(
+            content: Text(
+              widget.isEditing
+                  ? 'Receipt updated!'
+                  : 'Receipt saved successfully!',
+            ),
             backgroundColor: Colors.teal,
           ),
         );
@@ -309,9 +324,9 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Review Receipt',
-          style: TextStyle(
+        title: Text(
+          widget.isEditing ? 'Edit Receipt' : 'Review Receipt', // Dynamic Title
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -339,7 +354,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- Main Details ---
                     _buildGlassContainer(
                       child: Column(
                         children: [
@@ -375,7 +389,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                           ),
                           const Divider(color: Colors.white12, height: 1),
 
-                          // THE FIX: Clean ListTile Button instead of a Dropdown!
                           InkWell(
                             onTap: _showCategoryPicker,
                             child: Padding(
@@ -432,7 +445,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Dynamic Line Items
                     ..._editableItems.asMap().entries.map((entry) {
                       int index = entry.key;
                       var item = entry.value;
@@ -499,7 +511,6 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
               ),
             ),
 
-            // Glowing Gradient Save Button
             Padding(
               padding: const EdgeInsets.all(24),
               child: GestureDetector(
@@ -532,9 +543,11 @@ class _ReceiptPreviewScreenState extends ConsumerState<ReceiptPreviewScreen> {
                               strokeWidth: 3,
                             ),
                           )
-                        : const Text(
-                            'Confirm & Save',
-                            style: TextStyle(
+                        : Text(
+                            widget.isEditing
+                                ? 'Save Changes'
+                                : 'Confirm & Save',
+                            style: const TextStyle(
                               color: Colors.black87,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,

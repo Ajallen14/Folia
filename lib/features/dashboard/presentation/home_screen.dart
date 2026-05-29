@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import 'package:wallet_pulse/features/scanner/presentation/receipt_preview_screen.dart';
 import '../providers/receipt_provider.dart';
 import 'widgets/budget_section.dart';
 import 'widgets/receipt_list_item.dart';
+import '../../scanner/presentation/receipt_preview_screen.dart';
+import '../../../../core/database/database_helper.dart'; 
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -71,14 +72,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 _buildTopBar(),
                 const SizedBox(height: 30),
+
                 _buildSpendingSummary(dashboardState, ref),
                 const SizedBox(height: 30),
+
                 _buildChartSection(dashboardState),
                 const SizedBox(height: 40),
+
                 BudgetSection(categoryTotals: dashboardState.categoryTotals),
                 const SizedBox(height: 40),
 
-                // ... (AnimatedSwitcher and listTitle logic remains unchanged) ...
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Text(
+                    listTitle,
+                    key: ValueKey(dashboardState.currentFilter),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 400),
                   transitionBuilder: (child, animation) => FadeTransition(
@@ -146,24 +163,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ref
                                       .read(dashboardProvider.notifier)
                                       .deleteReceipt(receipt['id']);
-                                },
-                                // --- STEP 1: ADDED GESTURE DETECTOR ---
-                                child: GestureDetector(
-                                  onTap: () {
-                                    // Navigate to Review screen for editing
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ReceiptPreviewScreen(
-                                          initialData:
-                                              receipt, // Pass the receipt data
-                                          imagePath:
-                                              receipt['image_path'] ?? '',
-                                          isEditing:
-                                              true, // IMPORTANT: Set this to true
-                                        ),
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${receipt['merchant_name']} deleted',
                                       ),
-                                    );
+                                      backgroundColor: const Color(0xFF2C2C2E),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                },
+
+                                // --- THE ULTIMATE FIX: InkWell + Error Catching ---
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  onTap: () async {
+                                    try {
+                                      // THE FIX: Treat the ID as a String!
+                                      String receiptId =
+                                          receipt['id']?.toString() ?? '';
+
+                                      if (receiptId.isEmpty) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Error: Could not find Receipt ID in database',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      // Fetch the line items using the String UUID
+                                      final items = await DatabaseHelper
+                                          .instance
+                                          .getReceiptItems(receiptId);
+
+                                      // Combine the receipt data with its items
+                                      final fullData =
+                                          Map<String, dynamic>.from(receipt);
+                                      fullData['items'] = items;
+
+                                      if (context.mounted) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                ReceiptPreviewScreen(
+                                                  initialData: fullData,
+                                                  imagePath:
+                                                      receipt['image_path'] ??
+                                                      '',
+                                                  isEditing: true,
+                                                ),
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Error opening receipt: $e',
+                                            ),
+                                            backgroundColor: Colors.redAccent,
+                                            duration: const Duration(
+                                              seconds: 4,
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    }
                                   },
                                   child: ReceiptListItem(
                                     merchantName: receipt['merchant_name'],

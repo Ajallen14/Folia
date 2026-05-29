@@ -336,32 +336,63 @@ class DatabaseHelper {
     );
   }
 
-  Future<void> updateReceipt(int id, Map<String, dynamic> data) async {
-    final db = await database; // Ensure this matches your variable name
-
-    // 1. Update the main receipt details
-    await db.update(
-      'receipts',
-      {
-        'merchant_name': data['merchant_name'],
-        'purchase_date': data['date'],
-        'total_amount': data['total_amount'],
-        'category_name': data['receipt_category'],
-      },
-      where: 'id = ?',
-      whereArgs: [id],
+  // --- CORRECTED: FETCH ITEMS METHOD ---
+  Future<List<Map<String, dynamic>>> getReceiptItems(String receiptId) async {
+    final db = await database;
+    return await db.query(
+      'line_items', // Changed to match your exact table name!
+      where: 'receipt_id = ?',
+      whereArgs: [receiptId],
     );
+  }
 
-    // 2. Clear old items and insert updated items
-    await db.delete('receipt_items', where: 'receipt_id = ?', whereArgs: [id]);
+  // --- CORRECTED: UPDATE RECEIPT METHOD ---
+  Future<void> updateReceipt(String id, Map<String, dynamic> data) async {
+    final db = await database;
 
-    for (var item in data['items']) {
-      await db.insert('receipt_items', {
-        'receipt_id': id,
-        'item_name': item['item_name'],
-        'quantity': item['quantity'],
-        'price': item['price'],
-      });
-    }
+    await db.transaction((txn) async {
+      // Helper function to safely get the category ID, matching your save method
+      Future<String?> getCategoryId(String categoryName) async {
+        final maps = await txn.query('categories', columns: ['id'], where: 'name = ?', whereArgs: [categoryName]);
+        if (maps.isNotEmpty) return maps.first['id'] as String;
+        final otherMap = await txn.query('categories', columns: ['id'], where: 'name = ?', whereArgs: ['Other']);
+        return otherMap.isNotEmpty ? otherMap.first['id'] as String : null;
+      }
+
+      final String? masterCategoryId = await getCategoryId(data['receipt_category'] ?? 'Other');
+
+      // 1. Update main table using your actual column names
+      await txn.update(
+        'receipts',
+        {
+          'merchant_name': data['merchant_name'],
+          'purchase_date': data['date'],
+          'total_amount': data['total_amount'],
+          'category_id': masterCategoryId,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      // 2. Delete old items from your exact table
+      await txn.delete('line_items', where: 'receipt_id = ?', whereArgs: [id]);
+
+      // 3. Insert edited items
+      if (data['items'] != null && data['items'] is List) {
+        for (var item in data['items']) {
+          final String itemId = _uuid.v4();
+          final String? itemCategoryId = await getCategoryId(item['category'] ?? 'Other');
+
+          await txn.insert('line_items', {
+            'id': itemId,
+            'receipt_id': id,
+            'item_name': item['item_name'],
+            'quantity': item['quantity'] ?? 1,
+            'price': item['price'],
+            'category_id': itemCategoryId,
+          });
+        }
+      }
+    });
   }
 }
