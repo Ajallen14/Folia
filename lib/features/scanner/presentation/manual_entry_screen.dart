@@ -525,7 +525,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                                         child: GlassTextField(
                                           controller: item['nameController'],
                                           hint: 'Item Name',
-                                          icon: Icons.fastfood_outlined,
+                                          icon: Icons.label,
                                         ),
                                       ),
                                       IconButton(

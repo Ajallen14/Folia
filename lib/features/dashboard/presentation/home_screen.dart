@@ -7,7 +7,7 @@ import '../providers/receipt_provider.dart';
 import 'widgets/budget_section.dart';
 import 'widgets/receipt_list_item.dart';
 import '../../scanner/presentation/receipt_preview_screen.dart';
-import '../../../../core/database/database_helper.dart'; 
+import '../../../../core/database/database_helper.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -163,13 +163,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ref
                                       .read(dashboardProvider.notifier)
                                       .deleteReceipt(receipt['id']);
+
+                                  // Clear any existing snackbars so they don't queue up
+                                  ScaffoldMessenger.of(
+                                    context,
+                                  ).clearSnackBars();
+
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(
-                                        '${receipt['merchant_name']} deleted',
+                                      content: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.white,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              '${receipt['merchant_name']} deleted',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      backgroundColor: const Color(0xFF2C2C2E),
+                                      backgroundColor: Colors.redAccent
+                                          .withOpacity(0.9),
                                       behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      margin: const EdgeInsets.only(
+                                        bottom: 30,
+                                        left: 20,
+                                        right: 20,
+                                      ),
+                                      elevation: 10,
+                                      duration: const Duration(seconds: 2),
                                     ),
                                   );
                                 },
