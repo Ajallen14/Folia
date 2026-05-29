@@ -353,13 +353,25 @@ class DatabaseHelper {
     await db.transaction((txn) async {
       // Helper function to safely get the category ID, matching your save method
       Future<String?> getCategoryId(String categoryName) async {
-        final maps = await txn.query('categories', columns: ['id'], where: 'name = ?', whereArgs: [categoryName]);
+        final maps = await txn.query(
+          'categories',
+          columns: ['id'],
+          where: 'name = ?',
+          whereArgs: [categoryName],
+        );
         if (maps.isNotEmpty) return maps.first['id'] as String;
-        final otherMap = await txn.query('categories', columns: ['id'], where: 'name = ?', whereArgs: ['Other']);
+        final otherMap = await txn.query(
+          'categories',
+          columns: ['id'],
+          where: 'name = ?',
+          whereArgs: ['Other'],
+        );
         return otherMap.isNotEmpty ? otherMap.first['id'] as String : null;
       }
 
-      final String? masterCategoryId = await getCategoryId(data['receipt_category'] ?? 'Other');
+      final String? masterCategoryId = await getCategoryId(
+        data['receipt_category'] ?? 'Other',
+      );
 
       // 1. Update main table using your actual column names
       await txn.update(
@@ -381,7 +393,9 @@ class DatabaseHelper {
       if (data['items'] != null && data['items'] is List) {
         for (var item in data['items']) {
           final String itemId = _uuid.v4();
-          final String? itemCategoryId = await getCategoryId(item['category'] ?? 'Other');
+          final String? itemCategoryId = await getCategoryId(
+            item['category'] ?? 'Other',
+          );
 
           await txn.insert('line_items', {
             'id': itemId,
@@ -394,5 +408,22 @@ class DatabaseHelper {
         }
       }
     });
+  }
+
+  // Fetches bills that HAVE items, but HAVE NOT been split yet
+  Future<List<Map<String, dynamic>>> getUnsplitReceipts() async {
+    final db = await instance.database;
+    return await db.rawQuery('''
+      SELECT r.*, c.name as category_name
+      FROM receipts r
+      LEFT JOIN categories c ON r.category_id = c.id
+      WHERE EXISTS (SELECT 1 FROM line_items l WHERE l.receipt_id = r.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM line_items l2 
+        JOIN line_item_splits s ON l2.id = s.line_item_id 
+        WHERE l2.receipt_id = r.id
+      )
+      ORDER BY r.purchase_date DESC
+    ''');
   }
 }

@@ -15,9 +15,12 @@ class SplitsScreen extends StatefulWidget {
 class _SplitsScreenState extends State<SplitsScreen> {
   Future<void> _showNameDialog(
     BuildContext context,
-    Map<String, dynamic> receipt,
-  ) async {
-    List<String> people = ['Me'];
+    Map<String, dynamic> receipt, {
+    List<String>? initialPeople,
+  }) async {
+    List<String> people = initialPeople != null
+        ? List.from(initialPeople)
+        : ['Me'];
     final textController = TextEditingController();
 
     await showModalBottomSheet(
@@ -72,6 +75,7 @@ class _SplitsScreenState extends State<SplitsScreen> {
                               color: Colors.black54,
                               size: 18,
                             ),
+
                             onDeleted: p == 'Me'
                                 ? null
                                 : () {
@@ -128,7 +132,9 @@ class _SplitsScreenState extends State<SplitsScreen> {
                               friends: people,
                             ),
                           ),
-                        );
+                        ).then(
+                          (_) => setState(() {}),
+                        ); // Refresh when returning
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFE1BEE7),
@@ -157,117 +163,212 @@ class _SplitsScreenState extends State<SplitsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Split Bills',
-                  style: TextStyle(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF121212),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          toolbarHeight: 80,
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Split Bills',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const BalancesScreen()),
+                  );
+                },
+                child: _buildGlassContainer(
+                  padding: const EdgeInsets.all(8),
+                  child: const Icon(
+                    Icons.people_alt_outlined,
                     color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const BalancesScreen()),
-                    );
-                  },
-                  child: _buildGlassContainer(
-                    padding: const EdgeInsets.all(8),
-                    child: const Icon(
-                      Icons.people_alt_outlined,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-
-          Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: DatabaseHelper.instance.getReceiptsWithLineItems(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFFF8BBD0)),
-                  );
-                }
-
-                final receipts = snapshot.data ?? [];
-
-                if (receipts.isEmpty) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 40),
-                      child: Text(
-                        'No itemized receipts found. Scan a detailed bill to start splitting!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 16,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 10,
-                  ),
-                  itemCount: receipts.length,
-                  itemBuilder: (context, index) {
-                    final receipt = receipts[index];
-                    final rawDate = DateTime.parse(receipt['purchase_date']);
-                    final formattedDate = DateFormat(
-                      'dd MMM yyyy',
-                    ).format(rawDate);
-                    final formattedAmount = NumberFormat.currency(
-                      symbol: '₹',
-                      decimalDigits: 2,
-                    ).format(receipt['total_amount']);
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _buildSplitCard(
-                        merchantName: receipt['merchant_name'],
-                        date: formattedDate,
-                        totalAmount: formattedAmount,
-                        onTap: () => _showNameDialog(context, receipt),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+          bottom: const TabBar(
+            indicatorColor: Color(0xFFF8BBD0),
+            labelColor: Color(0xFFF8BBD0),
+            unselectedLabelColor: Colors.white54,
+            dividerColor: Colors.white12,
+            indicatorWeight: 3,
+            tabs: [
+              Tab(text: 'Ready to Split'),
+              Tab(text: 'Splitted Bills'),
+            ],
           ),
-          const SizedBox(height: 80),
-        ],
+        ),
+        body: TabBarView(
+          physics: const BouncingScrollPhysics(),
+          children: [_buildUnsplitTab(), _buildSplittedTab()],
+        ),
       ),
     );
   }
 
+  // --- TAB 1: READY TO SPLIT ---
+  Widget _buildUnsplitTab() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: DatabaseHelper.instance.getUnsplitReceipts(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFFF8BBD0)),
+          );
+        }
+
+        final receipts = snapshot.data ?? [];
+
+        if (receipts.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                'No new bills to split! Scan a detailed receipt to get started.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          itemCount: receipts.length,
+          itemBuilder: (context, index) {
+            final receipt = receipts[index];
+            final rawDate = DateTime.parse(receipt['purchase_date']);
+            final formattedDate = DateFormat('dd MMM yyyy').format(rawDate);
+            final formattedAmount = NumberFormat.currency(
+              symbol: '₹',
+              decimalDigits: 2,
+            ).format(receipt['total_amount']);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildSplitCard(
+                merchantName: receipt['merchant_name'],
+                date: formattedDate,
+                totalAmount: formattedAmount,
+                buttonText: 'Split It',
+                buttonColor: const Color(0xFFF8BBD0),
+                onTap: () => _showNameDialog(context, receipt),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- TAB 2: ALREADY SPLITTED ---
+  Widget _buildSplittedTab() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: DatabaseHelper.instance.getSplitHistory(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFFE0F7FA)),
+          );
+        }
+
+        final receipts = snapshot.data ?? [];
+
+        if (receipts.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                'You haven\'t split any bills yet.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          itemCount: receipts.length,
+          itemBuilder: (context, index) {
+            final receipt = receipts[index];
+            final rawDate = DateTime.parse(receipt['purchase_date']);
+            final formattedDate = DateFormat('dd MMM yyyy').format(rawDate);
+            final formattedAmount = NumberFormat.currency(
+              symbol: '₹',
+              decimalDigits: 2,
+            ).format(receipt['total_amount']);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildSplitCard(
+                merchantName: receipt['merchant_name'],
+                date: formattedDate,
+                totalAmount: formattedAmount,
+                buttonText: 'Edit Split',
+                buttonColor: const Color(0xFFE0F7FA),
+                onTap: () async {
+                  final existingSplits = await DatabaseHelper.instance
+                      .getSavedSplitsForReceipt(receipt['id'].toString());
+
+                  Set<String> uniqueNames = {'Me'};
+                  for (var split in existingSplits) {
+                    if (split['user_name'] != null) {
+                      uniqueNames.add(split['user_name']);
+                    }
+                  }
+
+                  if (context.mounted) {
+                    _showNameDialog(
+                      context,
+                      receipt,
+                      initialPeople: uniqueNames.toList(),
+                    );
+                  }
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- SHARED CARD WIDGET ---
   Widget _buildSplitCard({
     required String merchantName,
     required String date,
     required String totalAmount,
+    required String buttonText,
+    required Color buttonColor,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.05),
@@ -338,19 +439,19 @@ class _SplitsScreenState extends State<SplitsScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8BBD0),
+                          color: buttonColor,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFF8BBD0).withOpacity(0.3),
+                              color: buttonColor.withOpacity(0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: const Text(
-                          'Split It',
-                          style: TextStyle(
+                        child: Text(
+                          buttonText,
+                          style: const TextStyle(
                             color: Colors.black87,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
